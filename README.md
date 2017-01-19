@@ -4,7 +4,7 @@ _Big Data Analytics for Healthcare_
 as taken by: Jeff McGehee
 
 ## Notes
-* [Lesson1 - Some Extra Cool Topic](notes/lesson1.ipynb)
+* [Predictive Modeling](notes/PredictiveModeling.ipynb)
 
 ## Coding Exercises
 * [My first algorithm](exercises/algorithm.py)
