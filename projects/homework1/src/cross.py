@@ -1,4 +1,4 @@
-import models
+import models_partc
 from sklearn.cross_validation import KFold, ShuffleSplit
 from numpy import mean
 

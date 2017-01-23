@@ -11,7 +11,7 @@ def read_csv(filepath):
     Variables returned from this function are passed as input to the metric functions.
     '''
     events = pd.read_csv(filepath + 'events.csv')
-    mortality = pd.read_csv(filepath + 'mortality_events.csv ')
+    mortality = pd.read_csv(filepath + 'mortality_events.csv')
 
     return events, mortality
 
