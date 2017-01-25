@@ -231,7 +231,7 @@ def save_svmlight(patient_features, mortality, op_file, op_deliverable):
 def main():
     train_path = '../data/train/'
     events, mortality, feature_map = read_csv(train_path)
-    patient_features, mortality = create_features(events.iloc[:100, :], mortality, feature_map)
+    patient_features, mortality = create_features(events, mortality, feature_map)
     save_svmlight(patient_features, mortality, '../deliverables/features_svmlight.train', '../deliverables/features.train')
 
 if __name__ == "__main__":
