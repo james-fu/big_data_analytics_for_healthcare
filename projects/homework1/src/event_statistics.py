@@ -1,6 +1,7 @@
 import time
 import pandas as pd
 import numpy as np
+import utils
 
 # PLEASE USE THE GIVEN FUNCTION NAME, DO NOT CHANGE IT
 
@@ -10,31 +11,16 @@ def read_csv(filepath):
     Read the events.csv and mortality_events.csv files.
     Variables returned from this function are passed as input to the metric functions.
     '''
-    events = pd.read_csv(filepath + 'events.csv', parse_dates=['timestamp'])
-    events = events.sort_values('timestamp')
-
-    mortality = pd.read_csv(filepath + 'mortality_events.csv',
-                            parse_dates=['timestamp'])
-    mortality = mortality.sort_values('timestamp')
+    events, mortality, _ = utils.read_csv(filepath)
 
     return events, mortality
-
-def split_dead_and_alive(events, mortality):
-    patient_ids = events.patient_id.unique()
-    dead_ids = mortality.patient_id
-    alive_ids = pd.Series(list(set(patient_ids).difference(set(dead_ids))))
-
-    alive_events = events[events.patient_id.isin(alive_ids)]
-    dead_events =  events[events.patient_id.isin(dead_ids)]
-
-    return dead_events, alive_events
 
 def event_count_metrics(events, mortality):
     '''
     TODO : Implement this function to return the event count metrics.
     Event count is defined as the number of events recorded for a given patient.
     '''
-    dead_events, alive_events = split_dead_and_alive(events, mortality)
+    dead_events, alive_events = utils.split_dead_and_alive(events, mortality)
 
     alive_gb = alive_events.groupby('patient_id')
     dead_gb = dead_events.groupby('patient_id')
@@ -58,7 +44,7 @@ def encounter_count_metrics(events, mortality):
     '''
     encounter_labels = ['DRUG', 'LAB', 'DIAG']
 
-    dead_events, alive_events = split_dead_and_alive(events, mortality)
+    dead_events, alive_events = utils.split_dead_and_alive(events, mortality)
 
     alive_encounters = alive_events[pd.Series(np.any([alive_events.event_id.str.contains(x)
                                             for x in encounter_labels]),
@@ -89,7 +75,7 @@ def record_length_metrics(events, mortality):
     Record length is the duration between the first event and the last event for a given patient.
     '''
 
-    dead_events, alive_events = split_dead_and_alive(events, mortality)
+    dead_events, alive_events = utils.split_dead_and_alive(events, mortality)
 
     alive_gb = alive_events.groupby('patient_id')
     dead_gb = dead_events.groupby('patient_id')
