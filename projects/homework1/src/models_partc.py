@@ -4,6 +4,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.svm import LinearSVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import *
+import models_partb
 
 import utils
 
@@ -16,22 +17,31 @@ RANDOM_STATE = 545510477
 #output: Y_pred
 def logistic_regression_pred(X_train, Y_train, X_test):
 	#TODO: train a logistic regression classifier using X_train and Y_train. Use this to predict labels of X_test
-	#use default params for the classifier	
-	return None
+	#use default params for the classifier
+        clf = LogisticRegression()
+        clf.fit(X_train, Y_train)
+
+	return clf.predict(X_test)
 
 #input: X_train, Y_train and X_test
 #output: Y_pred
 def svm_pred(X_train, Y_train, X_test):
 	#TODO:train a SVM classifier using X_train and Y_train. Use this to predict labels of X_test
 	#use default params for the classifier
-	return None
+        clf = LinearSVC()
+        clf.fit(X_train, Y_train)
+
+	return clf.predict(X_test)
 
 #input: X_train, Y_train and X_test
 #output: Y_pred
 def decisionTree_pred(X_train, Y_train, X_test):
 	#TODO:train a logistic regression classifier using X_train and Y_train. Use this to predict labels of X_test
 	#IMPORTANT: use max_depth as 5. Else your test cases might fail.
-	return None
+        clf = DecisionTreeClassifier(max_depth=5)
+        clf.fit(X_train, Y_train)
+
+	return clf.predict(X_test)
 
 
 #input: Y_pred,Y_true
@@ -39,7 +49,8 @@ def decisionTree_pred(X_train, Y_train, X_test):
 def classification_metrics(Y_pred, Y_true):
 	#TODO: Calculate the above mentioned metrics
 	#NOTE: It is important to provide the output in the same order
-	return None,None,None,None,None
+
+	return models_partb.classification_metrics(Y_pred, Y_true)
 
 #input: Name of classifier, predicted labels, actual labels
 def display_metrics(classifierName,Y_pred,Y_true):
@@ -64,4 +75,4 @@ def main():
 
 if __name__ == "__main__":
 	main()
-	
+

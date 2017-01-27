@@ -152,3 +152,4 @@ def test_features_order():
     save_svmlight(patient_features, mortality, VALIDATION_FEATURES, VALIDATION_DELIVERABLE)
     result = filecmp.cmp('tests/expected_features.train', VALIDATION_DELIVERABLE)
     eq_(True, result, "Features are not same")
+

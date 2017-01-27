@@ -1,4 +1,5 @@
 import utils
+import pandas as pd
 #Note: You can reuse code that you wrote in etl.py and models.py and cross.py over here. It might help.
 # PLEASE USE THE GIVEN FUNCTION NAME, DO NOT CHANGE IT
 
@@ -17,8 +18,29 @@ input:
 output: X_train,Y_train,X_test
 '''
 def my_features():
-	#TODO: complete this
-	return None,None,None
+    events_df, mortality_df, feature_map_df = utils.read_csv('../data/train/')
+
+    print events_df.event_id.unique().shape
+
+
+    def agg_events(df):
+        event_name = df.event_id.iloc[0]
+
+        if 'LAB' in event_name:
+            return df.patient_id.count()
+
+        elif 'DIAG' in event_name or 'DRUG' in event_name:
+            return df.value.sum()
+
+    aggregated_events = events_df.groupby(['patient_id',
+                                           'event_id']).apply(agg_events)
+
+    aggregated_events.name = 'value'
+    aggregated_events = aggregated_events.reset_index()
+    pivoted = aggregated_events.pivot(index='patient_id', columns='event_id', values='value')
+    pivoted = pivoted / pivoted.max()
+    print pd.melt(pivoted).dropna()
+    return None,None,None
 
 
 '''
@@ -28,17 +50,17 @@ input: X_train, Y_train, X_test
 output: Y_pred
 '''
 def my_classifier_predictions(X_train,Y_train,X_test):
-	#TODO: complete this
-	return None
+    #TODO: complete this
+    return None
 
 
 def main():
-	X_train, Y_train, X_test = my_features()
-	Y_pred = my_classifier_predictions(X_train,Y_train,X_test)
-	utils.generate_submission("../deliverables/test_features.txt",Y_pred)
-	#The above function will generate a csv file of (patient_id,predicted label) and will be saved as "my_predictions.csv" in the deliverables folder.
+    X_train, Y_train, X_test = my_features()
+    Y_pred = my_classifier_predictions(X_train,Y_train,X_test)
+    # utils.generate_submission("../deliverables/test_features.txt",Y_pred)
+    #The above function will generate a csv file of (patient_id,predicted label) and will be saved as "my_predictions.csv" in the deliverables folder.
 
 if __name__ == "__main__":
     main()
 
-	
+

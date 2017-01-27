@@ -2,6 +2,7 @@ import utils
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
+from parallel import apply_parallel, QueuedMap
 
 # PLEASE USE THE GIVEN FUNCTION NAME, DO NOT CHANGE IT
 
@@ -51,9 +52,6 @@ def calculate_index_date(events, mortality, deliverables_path):
 
     alive_indexes = pd.DataFrame(alive_events.groupby('patient_id').apply(live_index_finder))
 
-    print type(dead_indexes)
-    print type(alive_indexes)
-
     indx_date = alive_indexes.append(dead_indexes).sort_index()
     indx_date = indx_date.reset_index()
     indx_date.columns = ['patient_id', 'indx_date']
@@ -95,7 +93,10 @@ def filter_events(events, indx_date, deliverables_path):
 
     filtered_events = events_w_idx[mask]
 
-    filtered_events.to_csv(deliverables_path + 'etl_filtered_events.csv', columns=['patient_id', 'event_id', 'value'], index=False)
+    filtered_events.to_csv(deliverables_path + 'etl_filtered_events.csv',
+                           columns=['patient_id', 'event_id', 'value'],
+                           index=False)
+
 
     return filtered_events
 
@@ -125,41 +126,61 @@ def aggregate_events(filtered_events_df, mortality_df,feature_map_df, deliverabl
     Return filtered_events
     '''
 
+
+    # 1. Replace event_id's with index available in event_feature_map.csv
+    print('Re-mapping feature ids...')
+    feature_map_df = feature_map_df.set_index('event_id').to_dict()['idx']
+
+
+    def remap(x):
+        return feature_map_df[x]
+
+    feature_ids = QueuedMap(remap,
+                            filtered_events_df.event_id.tolist()).run()
+
+    # feature_ids = filtered_events_df['event_id'].replace(feature_map_df)
+    filtered_events_df['feature_id'] = pd.Series(feature_ids,
+                                                 index=filtered_events_df.index)
+
+    # 2. Remove events with n/a values
+    filtered_events_df = filtered_events_df.dropna()
+
+
+    # 3. Aggregate events using sum and count to calculate feature value
     def agg_events(df):
         event_name = df.event_id.iloc[0]
-        patient_id = df.patient_id.iloc[0]
-
 
         if 'LAB' in event_name:
             return df.patient_id.count()
 
-        else:
+        elif 'DIAG' in event_name or 'DRUG' in event_name:
             return df.value.sum()
 
-    filtered_events = filtered_events_df.dropna()
-    aggregated_events = filtered_events_df.groupby(['patient_id',
-                                                    'event_id']).apply(agg_events)
+    agg_cols = ['patient_id', 'event_id', 'feature_id']
+    aggregated_events = filtered_events_df.groupby(agg_cols)
+
+    print('Calling apply_parallel...')
+    aggregated_events = apply_parallel(agg_events, aggregated_events)
+
     aggregated_events.name = 'feature_value'
+    aggregated_events.index = aggregated_events.index.rename(agg_cols)
+
     aggregated_events = aggregated_events.reset_index()
 
-    feature_map_df = feature_map_df.set_index('event_id')
-
-    aggregated_events = aggregated_events.join(feature_map_df, on='event_id',
-                                               how='left')
-
-    aggregated_events = aggregated_events[['patient_id', 'idx',
+    # print aggregated_events
+    aggregated_events = aggregated_events[['patient_id', 'feature_id',
                                            'feature_value']]
-    aggregated_events.columns = ['patient_id', 'feature_id', 'feature_value']
 
 
-    def normalize(df):
-        zero_norm = df.feature_value
+    # 4. Normalize the values obtained above using min-max normalization(the min value will be 0 in all scenarios)
+    pivoted = aggregated_events.pivot(index='patient_id',
+                                      columns='feature_id',
+                                      values='feature_value')
 
-        return zero_norm/zero_norm.max()
-
-    normed = aggregated_events.groupby('feature_id').apply(normalize).reset_index().set_index('level_1')
-
-    aggregated_events = normed.join(aggregated_events['patient_id']).dropna().sort_index()#.join(normed)
+    normed = pivoted/pivoted.max()
+    normed = normed.reset_index()
+    aggregated_events = pd.melt(normed, id_vars='patient_id',
+                                value_name='feature_value').dropna()
 
     aggregated_events.to_csv(deliverables_path + 'etl_aggregated_events.csv', columns=['patient_id', 'feature_id', 'feature_value'], index=False)
 
@@ -170,12 +191,15 @@ def create_features(events, mortality, feature_map):
     deliverables_path = '../deliverables/'
 
     #Calculate index date
+    print('Calculating index date...')
     indx_date = calculate_index_date(events, mortality, deliverables_path)
 
     #Filter events in the observation window
+    print('Filtering events...')
     filtered_events = filter_events(events, indx_date,  deliverables_path)
 
     #Aggregate the event values for each patient
+    print('Aggregating events...')
     aggregated_events = aggregate_events(filtered_events, mortality, feature_map, deliverables_path)
 
     '''
@@ -183,15 +207,17 @@ def create_features(events, mortality, feature_map):
     1. patient_features :  Key - patient_id and value is array of tuples(feature_id, feature_value)
     2. mortality : Key - patient_id and value is mortality label
     '''
+
+    print('Building feature tuples...')
     tuple_dict = aggregated_events.groupby('patient_id').apply(lambda x:
                                                                list(x.sort_values('feature_id').apply(lambda y:
                                                                     (y.feature_id,
                                                                      y.feature_value),
                                                                      axis=1)))
-
     all_ids = aggregated_events.patient_id.unique()
     is_dead = pd.Series(all_ids, index=all_ids).apply(lambda x: int(x in
                                                            mortality.patient_id))
+
 
     patient_features = tuple_dict.to_dict()
     mortality = is_dead.to_dict()
@@ -222,16 +248,19 @@ def save_svmlight(patient_features, mortality, op_file, op_deliverable):
 
         features = features.values.tolist()
 
-        deliverable1.write("{} {} \n".format(mortality[patient],
+        deliverable1.write("{} {} \n".format(mortality.get(patient, 0),
                                           utils.bag_to_svmlight(features)))
         deliverable2.write("{} {} {} \n".format(int(patient),
-                                             mortality[patient],
+                                                mortality.get(patient, 0),
                                              utils.bag_to_svmlight(features)))
 
 def main():
     train_path = '../data/train/'
     events, mortality, feature_map = read_csv(train_path)
-    patient_features, mortality = create_features(events, mortality, feature_map)
+    patient_features, mortality = create_features(events.iloc[:, :],
+                                                  mortality.iloc[:, :], feature_map)
+
+    print('Saving in svm format...')
     save_svmlight(patient_features, mortality, '../deliverables/features_svmlight.train', '../deliverables/features.train')
 
 if __name__ == "__main__":
