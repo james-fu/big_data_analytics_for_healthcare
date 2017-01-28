@@ -1,6 +1,7 @@
 import models_partc
 from sklearn.cross_validation import KFold, ShuffleSplit
 from numpy import mean
+import numpy as np
 
 import utils
 
@@ -16,7 +17,24 @@ def get_acc_auc_kfold(X,Y,k=5):
 	#TODO:First get the train indices and test indices for each iteration
 	#Then train the classifier accordingly
 	#Report the mean accuracy and mean auc of all the folds
-	return None,None
+
+        acc_array = []
+
+        kf = KFold(X.shape[0], k)
+        for train, test in kf:
+            X_train, Y_train = (X[train, :], Y[train])
+            X_test, Y_test = (X[test, :], Y[test])
+
+            Y_pred = models_partc.logistic_regression_pred(X_train,
+                                                           Y_train,
+                                                           X_test)
+
+            acc, auc, _, _, _ = models_partc.classification_metrics(Y_pred, Y_test)
+            acc_array.append([acc, auc])
+
+        acc_array = np.array(acc_array)
+
+        return np.mean(acc_array[:, 0]), np.mean(acc_array[:, 1])
 
 
 #input: training data and corresponding labels
@@ -25,7 +43,23 @@ def get_acc_auc_randomisedCV(X,Y,iterNo=5,test_percent=0.2):
 	#TODO: First get the train indices and test indices for each iteration
 	#Then train the classifier accordingly
 	#Report the mean accuracy and mean auc of all the iterations
-	return None,None
+        acc_array = []
+
+        kf = ShuffleSplit(X.shape[0], n_iter=iterNo, test_size=test_percent)
+        for train, test in kf:
+            X_train, Y_train = (X[train, :], Y[train])
+            X_test, Y_test = (X[test, :], Y[test])
+
+            Y_pred = models_partc.logistic_regression_pred(X_train,
+                                                           Y_train,
+                                                           X_test)
+
+            acc, auc, _, _, _ = models_partc.classification_metrics(Y_pred, Y_test)
+            acc_array.append([acc, auc])
+
+        acc_array = np.array(acc_array)
+
+        return np.mean(acc_array[:, 0]), np.mean(acc_array[:, 1])
 
 
 def main():
