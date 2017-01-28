@@ -3,6 +3,13 @@ import etl
 import pandas as pd
 import numpy as np
 import time
+from sklearn.pipeline import Pipeline
+from sklearn.decomposition import PCA
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.cross_validation import StratifiedKFold
+from sklearn.grid_search import GridSearchCV
+from sklearn.externals import joblib
+
 #Note: You can reuse code that you wrote in etl.py and models.py and cross.py over here. It might help.
 # PLEASE USE THE GIVEN FUNCTION NAME, DO NOT CHANGE IT
 
@@ -25,12 +32,11 @@ def my_features():
 
     train_events, train_mortality, feature_map = utils.read_csv('../data/train/')
 
-    print train_mortality.patient_id.max()
-    print train_mortality.label.sum()
+    all_features = set(feature_map.idx.unique())
 
-    test_events, test_mortality, _ = utils.read_csv('../data/test/')
+    test_events, _, _ = utils.read_csv('../data/test/')
 
-    train_events = clean_training_data(train_events, train_mortality)
+    train_events = clean_training_data(train_events.iloc[:, :], train_mortality)
     train_features_long = etl.aggregate_events(train_events,
                                                None,
                                                feature_map,
@@ -42,21 +48,30 @@ def my_features():
 
     train_features = train_features_array.fillna(0)
 
-    train_patients = set(train_features.index.tolist())
-    print len(train_patients.intersection(set(train_mortality.patient_id.tolist())))
-
     patient_id_series = pd.Series(train_features.index,
                                   index=train_features.index)
 
     dead_ids = list(train_mortality.patient_id)
-    train_labels = [id in dead_ids for id in list(patient_id_series)]
+    train_labels = np.array([id in dead_ids for id in list(patient_id_series)])
 
-    print np.sum(train_labels)
+    X_train = add_columns(all_features, train_features)
+    Y_train = train_labels
 
-    # print train_labels
+    test_features_long = etl.aggregate_events(test_events.iloc[:, :],
+                                              None,
+                                              feature_map,
+                                              '/tmp/')
 
+    test_features_array = test_features_long.pivot(index='patient_id',
+                                                   columns='feature_id',
+                                                   values='feature_value')
+    X_test = add_columns(all_features, test_features_array.fillna(0))
+    save_test_features(test_features_long)
     print 'Feature creation took {} seconds!'.format(time.time()-start)
-    return None,None,None
+
+    print X_train.shape, X_test.shape
+    return X_train, Y_train, X_test
+
 
 def clean_training_data(train_events, train_mortality):
     indx_dates = etl.calculate_index_date(train_events,
@@ -65,6 +80,31 @@ def clean_training_data(train_events, train_mortality):
 
     return etl.filter_events(train_events, indx_dates, '/tmp/')
 
+def add_columns(full_set, df):
+    to_add = full_set.difference(df.columns)
+
+    new_df = pd.DataFrame(columns=to_add, index=df.index)
+
+    full_df = pd.concat((df, new_df), axis=1)
+    full_df = full_df.reindex_axis(sorted(full_df.columns), axis=1)
+
+    print len(full_set), full_df.values.shape, df.values.shape
+
+    return full_df.fillna(0)
+
+def save_test_features(test_features_long):
+    tuple_dict = test_features_long.groupby('patient_id').apply(lambda x:
+                                                               list(x.sort_values('feature_id').apply(lambda y:
+                                                                    (y.feature_id,
+                                                                     y.feature_value),
+                                                                     axis=1)))
+    patient_features = tuple_dict.to_dict()
+
+    deliverable1 = open('../deliverables/test_features.txt', 'wb')
+
+    for patient, features in patient_features.iteritems():
+        deliverable1.write("{} {} \n".format(patient,
+                                             utils.bag_to_svmlight(features)))
 '''
 You can use any model you wish.
 
@@ -73,13 +113,32 @@ output: Y_pred
 '''
 def my_classifier_predictions(X_train,Y_train,X_test):
     #TODO: complete this
-    return None
 
+    clf = Pipeline(steps=[('pca', PCA()), ('rf', RandomForestClassifier())])
+
+    params = dict(pca__n_components=np.arange(50, 500, 50),
+                  rf__n_estimators=np.arange(10, 100, 10),
+                  rf__max_depth=np.arange(5, 105, 20))
+
+    best_clf = GridSearchCV(clf, params, n_jobs=32, scoring='roc_auc',
+                            verbose=5, cv=5)
+
+    best_clf.fit(X_train, Y_train)
+
+    print best_clf.best_score_
+    print best_clf.best_params_
+
+    joblib.dump(best_clf.best_estimator_, './best_model.pkl')
+
+
+    return best_clf.best_estimator_.predict_proba(X_test)
+
+    # return best_clf.predict_proba(X_test)[:, 1]
 
 def main():
     X_train, Y_train, X_test = my_features()
     Y_pred = my_classifier_predictions(X_train,Y_train,X_test)
-    # utils.generate_submission("../deliverables/test_features.txt",Y_pred)
+    utils.generate_submission("../deliverables/test_features.txt",Y_pred)
     #The above function will generate a csv file of (patient_id,predicted label) and will be saved as "my_predictions.csv" in the deliverables folder.
 
 if __name__ == "__main__":

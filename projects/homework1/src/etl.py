@@ -130,20 +130,11 @@ def aggregate_events(filtered_events_df, mortality_df,feature_map_df, deliverabl
 
     # 1. Replace event_id's with index available in event_feature_map.csv
     print('Re-mapping feature ids...')
-    feature_map_df = feature_map_df.set_index('event_id').to_dict()['idx']
 
-    print filtered_events_df.join(test.set_index('event_id'),
+    joined = filtered_events_df.join(test.set_index('event_id'),
                                on='event_id')
 
-    def remap(x):
-        return feature_map_df[x]
-
-    feature_ids = QueuedMap(remap,
-                            filtered_events_df.event_id.tolist()).run()
-
-    # feature_ids = filtered_events_df['event_id'].replace(feature_map_df)
-    filtered_events_df['feature_id'] = pd.Series(feature_ids,
-                                                 index=filtered_events_df.index)
+    filtered_events_df['feature_id'] = joined['idx']
 
     # 2. Remove events with n/a values
     filtered_events_df = filtered_events_df.dropna()
@@ -218,15 +209,9 @@ def create_features(events, mortality, feature_map):
                                                                     (y.feature_id,
                                                                      y.feature_value),
                                                                      axis=1)))
-    all_ids = aggregated_events.patient_id.unique()
-    is_dead = pd.Series(all_ids, index=all_ids).apply(lambda x: int(x in
-                                                           mortality.patient_id))
-
-
     patient_features = tuple_dict.to_dict()
-    # mortality = is_dead.to_dict()
 
-
+    all_ids = aggregated_events.patient_id.unique()
     dead_ids = list(mortality.patient_id)
     train_labels = [(id, int(id in dead_ids)) for id in list(all_ids)]
     mortality = dict(train_labels)
