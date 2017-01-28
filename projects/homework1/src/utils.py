@@ -11,8 +11,11 @@ def read_csv(filepath):
     events_df = events_df.sort_values('timestamp')
 
     #Columns in mortality_event.csv - patient_id,timestamp,label
-    mortality_df = pd.read_csv(filepath + 'mortality_events.csv', parse_dates=['timestamp'])
-    mortality_df = mortality_df.sort_values('timestamp')
+    try:
+        mortality_df = pd.read_csv(filepath + 'mortality_events.csv', parse_dates=['timestamp'])
+        mortality_df = mortality_df.sort_values('timestamp')
+    except IOError:
+        mortality_df = None
 
     #Columns in event_feature_map.csv - idx,event_id
     try:

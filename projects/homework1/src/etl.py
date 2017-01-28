@@ -92,6 +92,7 @@ def filter_events(events, indx_date, deliverables_path):
                           mask_diff <= pd.Timedelta(days=2000))
 
     filtered_events = events_w_idx[mask]
+    filtered_events = filtered_events[['patient_id', 'event_id', 'value']]
 
     filtered_events.to_csv(deliverables_path + 'etl_filtered_events.csv',
                            columns=['patient_id', 'event_id', 'value'],
@@ -125,12 +126,14 @@ def aggregate_events(filtered_events_df, mortality_df,feature_map_df, deliverabl
 
     Return filtered_events
     '''
-
+    test = feature_map_df
 
     # 1. Replace event_id's with index available in event_feature_map.csv
     print('Re-mapping feature ids...')
     feature_map_df = feature_map_df.set_index('event_id').to_dict()['idx']
 
+    print filtered_events_df.join(test.set_index('event_id'),
+                               on='event_id')
 
     def remap(x):
         return feature_map_df[x]
@@ -178,6 +181,7 @@ def aggregate_events(filtered_events_df, mortality_df,feature_map_df, deliverabl
                                       values='feature_value')
 
     normed = pivoted/pivoted.max()
+
     normed = normed.reset_index()
     aggregated_events = pd.melt(normed, id_vars='patient_id',
                                 value_name='feature_value').dropna()
@@ -220,7 +224,12 @@ def create_features(events, mortality, feature_map):
 
 
     patient_features = tuple_dict.to_dict()
-    mortality = is_dead.to_dict()
+    # mortality = is_dead.to_dict()
+
+
+    dead_ids = list(mortality.patient_id)
+    train_labels = [(id, int(id in dead_ids)) for id in list(all_ids)]
+    mortality = dict(train_labels)
 
     return patient_features, mortality
 

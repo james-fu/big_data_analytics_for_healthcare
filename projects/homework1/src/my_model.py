@@ -1,5 +1,8 @@
 import utils
+import etl
 import pandas as pd
+import numpy as np
+import time
 #Note: You can reuse code that you wrote in etl.py and models.py and cross.py over here. It might help.
 # PLEASE USE THE GIVEN FUNCTION NAME, DO NOT CHANGE IT
 
@@ -18,30 +21,49 @@ input:
 output: X_train,Y_train,X_test
 '''
 def my_features():
-    events_df, mortality_df, feature_map_df = utils.read_csv('../data/train/')
+    start = time.time()
 
-    print events_df.event_id.unique().shape
+    train_events, train_mortality, feature_map = utils.read_csv('../data/train/')
 
+    print train_mortality.patient_id.max()
+    print train_mortality.label.sum()
 
-    def agg_events(df):
-        event_name = df.event_id.iloc[0]
+    test_events, test_mortality, _ = utils.read_csv('../data/test/')
 
-        if 'LAB' in event_name:
-            return df.patient_id.count()
+    train_events = clean_training_data(train_events, train_mortality)
+    train_features_long = etl.aggregate_events(train_events,
+                                               None,
+                                               feature_map,
+                                               '/tmp/')
 
-        elif 'DIAG' in event_name or 'DRUG' in event_name:
-            return df.value.sum()
+    train_features_array = train_features_long.pivot(index='patient_id',
+                                                     columns='feature_id',
+                                                     values='feature_value')
 
-    aggregated_events = events_df.groupby(['patient_id',
-                                           'event_id']).apply(agg_events)
+    train_features = train_features_array.fillna(0)
 
-    aggregated_events.name = 'value'
-    aggregated_events = aggregated_events.reset_index()
-    pivoted = aggregated_events.pivot(index='patient_id', columns='event_id', values='value')
-    pivoted = pivoted / pivoted.max()
-    print pd.melt(pivoted).dropna()
+    train_patients = set(train_features.index.tolist())
+    print len(train_patients.intersection(set(train_mortality.patient_id.tolist())))
+
+    patient_id_series = pd.Series(train_features.index,
+                                  index=train_features.index)
+
+    dead_ids = list(train_mortality.patient_id)
+    train_labels = [id in dead_ids for id in list(patient_id_series)]
+
+    print np.sum(train_labels)
+
+    # print train_labels
+
+    print 'Feature creation took {} seconds!'.format(time.time()-start)
     return None,None,None
 
+def clean_training_data(train_events, train_mortality):
+    indx_dates = etl.calculate_index_date(train_events,
+                                          train_mortality,
+                                          '/tmp/')
+
+    return etl.filter_events(train_events, indx_dates, '/tmp/')
 
 '''
 You can use any model you wish.
