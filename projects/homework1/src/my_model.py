@@ -9,6 +9,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.cross_validation import StratifiedKFold
 from sklearn.grid_search import GridSearchCV
 from sklearn.externals import joblib
+from sklearn.tree import DecisionTreeClassifier
 
 #Note: You can reuse code that you wrote in etl.py and models.py and cross.py over here. It might help.
 # PLEASE USE THE GIVEN FUNCTION NAME, DO NOT CHANGE IT
@@ -69,7 +70,6 @@ def my_features():
     save_test_features(test_features_long)
     print 'Feature creation took {} seconds!'.format(time.time()-start)
 
-    print X_train.shape, X_test.shape
     return X_train, Y_train, X_test
 
 
@@ -88,7 +88,6 @@ def add_columns(full_set, df):
     full_df = pd.concat((df, new_df), axis=1)
     full_df = full_df.reindex_axis(sorted(full_df.columns), axis=1)
 
-    print len(full_set), full_df.values.shape, df.values.shape
 
     return full_df.fillna(0)
 
@@ -114,9 +113,23 @@ output: Y_pred
 def my_classifier_predictions(X_train,Y_train,X_test):
     #TODO: complete this
 
+    clf1 = joblib.load('./best_model.pkl')
+
+    clf1_train_predictions = clf1.predict_proba(X_train)
+    clf1_test_predictions = clf1.predict_proba(X_test)
+
+    clf2 = train_secondary(np.concatenate((clf1_train_predictions, X_train),
+                                          axis=-1), Y_train)
+
+    return clf2.predict_proba(np.concatenate((clf1_test_predictions, X_test),
+                                             axis=-1))[:, 1]
+
+    return
+
+def train_initial(X_train, Y_train):
     clf = Pipeline(steps=[('pca', PCA()), ('rf', RandomForestClassifier())])
 
-    params = dict(pca__n_components=np.arange(50, 500, 50),
+    params = dict(pca__n_components=np.arange(500, 1000, 50),
                   rf__n_estimators=np.arange(10, 100, 10),
                   rf__max_depth=np.arange(5, 105, 20))
 
@@ -125,15 +138,33 @@ def my_classifier_predictions(X_train,Y_train,X_test):
 
     best_clf.fit(X_train, Y_train)
 
+    joblib.dump(best_clf.best_estimator_, './best_model.pkl')
+
     print best_clf.best_score_
     print best_clf.best_params_
 
-    joblib.dump(best_clf.best_estimator_, './best_model.pkl')
+    return best_clf.best_estimator_
 
+def train_secondary(X_train, Y_train):
 
-    return best_clf.best_estimator_.predict_proba(X_test)
+    clf = Pipeline(steps=[('pca', PCA()), ('dt', DecisionTreeClassifier())])
 
-    # return best_clf.predict_proba(X_test)[:, 1]
+    params = dict(pca__n_components=np.arange(50, 100, 10),
+                  dt__max_depth=np.arange(5, 105, 20),
+                  dt__min_samples_split=np.arange(2, 20, 2))
+
+    best_clf = GridSearchCV(clf, params, n_jobs=32, scoring='roc_auc',
+                            verbose=5, cv=5)
+
+    best_clf.fit(X_train, Y_train)
+
+    joblib.dump(best_clf.best_estimator_, './best_secondary_model.pkl')
+
+    print best_clf.best_score_
+    print best_clf.best_params_
+
+    return best_clf.best_estimator_
+
 
 def main():
     X_train, Y_train, X_test = my_features()
