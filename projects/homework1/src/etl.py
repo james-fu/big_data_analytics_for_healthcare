@@ -150,18 +150,25 @@ def aggregate_events(filtered_events_df, mortality_df,feature_map_df, deliverabl
         elif 'DIAG' in event_name or 'DRUG' in event_name:
             return df.value.sum()
 
+
     agg_cols = ['patient_id', 'event_id', 'feature_id']
     aggregated_events = filtered_events_df.groupby(agg_cols)
 
-    print('Calling apply_parallel...')
-    aggregated_events = apply_parallel(agg_events, aggregated_events)
 
-    aggregated_events.name = 'feature_value'
-    aggregated_events.index = aggregated_events.index.rename(agg_cols)
+    lab_scores = filtered_events_df[filtered_events_df.event_id.str.contains('LAB')]
+    lab_scores = lab_scores.groupby(agg_cols).patient_id.count()
 
-    aggregated_events = aggregated_events.reset_index()
+    other_scores = filtered_events_df[np.logical_or(
+        filtered_events_df.event_id.str.contains('DIAG'),
+        filtered_events_df.event_id.str.contains('DRUG'),
+    )
+    ]
 
-    # print aggregated_events
+    other_scores = other_scores.groupby(agg_cols).value.sum()
+
+    aggregated_events = pd.concat((other_scores, lab_scores)).reset_index()
+    aggregated_events.columns = agg_cols + ['feature_value']
+
     aggregated_events = aggregated_events[['patient_id', 'feature_id',
                                            'feature_value']]
 
