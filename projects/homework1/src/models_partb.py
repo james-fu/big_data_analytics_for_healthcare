@@ -49,10 +49,6 @@ def decisionTree_pred(X_train, Y_train):
 #output: accuracy, auc, precision, recall, f1-score
 def classification_metrics(Y_pred, Y_true):
     #NOTE: It is important to provide the output in the same order
-    print Y_pred.shape, Y_true.shape
-    print (Y_pred - Y_true).sum()
-    print Y_pred
-
     return (accuracy_score(Y_true, Y_pred),
             roc_auc_score(Y_true, Y_pred),
             precision_score(Y_true, Y_pred),
