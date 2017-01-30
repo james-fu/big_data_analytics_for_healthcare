@@ -4,12 +4,19 @@ import pandas as pd
 import numpy as np
 import time
 from sklearn.pipeline import Pipeline
-from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA, TruncatedSVD
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.cross_validation import StratifiedKFold
+from sklearn.cross_validation import StratifiedKFold, ShuffleSplit
 from sklearn.grid_search import GridSearchCV
 from sklearn.externals import joblib
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+from sklearn.linear_model import LassoCV, LogisticRegressionCV
+from sklearn.ensemble import GradientBoostingClassifier, AdaBoostClassifier
+from sklearn.svm import LinearSVC, SVC
+from sklearn.manifold import TSNE
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn import feature_selection
+from sklearn import preprocessing
 
 #Note: You can reuse code that you wrote in etl.py and models.py and cross.py over here. It might help.
 # PLEASE USE THE GIVEN FUNCTION NAME, DO NOT CHANGE IT
@@ -38,16 +45,8 @@ def my_features():
     test_events, _, _ = utils.read_csv('../data/test/')
 
     train_events = clean_training_data(train_events.iloc[:, :], train_mortality)
-    train_features_long = etl.aggregate_events(train_events,
-                                               None,
-                                               feature_map,
-                                               '/tmp/')
 
-    train_features_array = train_features_long.pivot(index='patient_id',
-                                                     columns='feature_id',
-                                                     values='feature_value')
-
-    train_features = train_features_array.fillna(0)
+    train_features, test_features = extra_features(train_events, test_events)
 
     patient_id_series = pd.Series(train_features.index,
                                   index=train_features.index)
@@ -55,23 +54,40 @@ def my_features():
     dead_ids = list(train_mortality.patient_id)
     train_labels = np.array([id in dead_ids for id in list(patient_id_series)])
 
-    X_train = add_columns(all_features, train_features)
+    X_train = train_features
     Y_train = train_labels
 
-    test_features_long = etl.aggregate_events(test_events.iloc[:, :],
-                                              None,
-                                              feature_map,
-                                              '/tmp/')
 
-    test_features_array = test_features_long.pivot(index='patient_id',
-                                                   columns='feature_id',
-                                                   values='feature_value')
-    X_test = add_columns(all_features, test_features_array.fillna(0))
+
+
+    X_test = test_features.sort_index()
+
+
+    test_features.index.name = 'patient_id'
+    test_features_long = pd.melt(test_features.reset_index(),id_vars=['patient_id'] )
+    test_features_long.columns = ['patient_id', 'feature_id', 'feature_value']
+    test_features_long = test_features_long.sort_values('patient_id')
+
     save_test_features(test_features_long)
     print 'Feature creation took {} seconds!'.format(time.time()-start)
 
     return X_train, Y_train, X_test
 
+def extra_features(train_events_df, test_events_df):
+    train_descriptions = train_events_df.groupby('patient_id').event_description.apply(lambda x:
+                                                                  x.str.cat(sep=' '))
+
+    test_descriptions = test_events_df.groupby('patient_id').event_description.apply(lambda x:
+                                                                  x.str.cat(sep=' '))
+
+
+    counter = CountVectorizer(ngram_range=(1, 2), min_df=0.1, max_df=0.8)
+    train_events = counter.fit_transform(train_descriptions)
+    test_events = counter.transform(test_descriptions)
+
+
+    return (pd.DataFrame(train_events.toarray(), index=train_descriptions.index),
+            pd.DataFrame(test_events.toarray(), index=test_descriptions.index))
 
 def clean_training_data(train_events, train_mortality):
     indx_dates = etl.calculate_index_date(train_events,
@@ -88,7 +104,6 @@ def add_columns(full_set, df):
     full_df = pd.concat((df, new_df), axis=1)
     full_df = full_df.reindex_axis(sorted(full_df.columns), axis=1)
 
-
     return full_df.fillna(0)
 
 def save_test_features(test_features_long):
@@ -101,9 +116,9 @@ def save_test_features(test_features_long):
 
     deliverable1 = open('../deliverables/test_features.txt', 'wb')
 
-    for patient, features in patient_features.iteritems():
+    for patient in sorted(patient_features.keys()):
         deliverable1.write("{} {} \n".format(patient,
-                                             utils.bag_to_svmlight(features)))
+                                             utils.bag_to_svmlight(patient_features[patient])))
 '''
 You can use any model you wish.
 
@@ -111,50 +126,69 @@ input: X_train, Y_train, X_test
 output: Y_pred
 '''
 def my_classifier_predictions(X_train,Y_train,X_test):
-    #TODO: complete this
 
-    clf1 = joblib.load('./best_model.pkl')
+    clf1 = train_initial(X_train, Y_train)
 
     clf1_train_predictions = clf1.predict_proba(X_train)
+
     clf1_test_predictions = clf1.predict_proba(X_test)
 
     clf2 = train_secondary(np.concatenate((clf1_train_predictions, X_train),
                                           axis=-1), Y_train)
 
-    return clf2.predict_proba(np.concatenate((clf1_test_predictions, X_test),
-                                             axis=-1))[:, 1]
+    utils.generate_kaggle_submission("../deliverables/test_features.txt",
+                                     clf1.predict_proba(X_test)[:, 1])
+    return clf2.predict(np.concatenate((clf1_test_predictions, X_test),
+                                             axis=-1)).astype(int)
 
-    return
+
+    utils.generate_kaggle_submission("../deliverables/test_features.txt",
+                                     clf1.predict_proba(X_test)[:, 1])
+    return clf1.predict(X_test).astype(int)
 
 def train_initial(X_train, Y_train):
-    clf = Pipeline(steps=[('pca', PCA()), ('rf', RandomForestClassifier())])
 
-    params = dict(pca__n_components=np.arange(500, 1000, 50),
-                  rf__n_estimators=np.arange(10, 100, 10),
-                  rf__max_depth=np.arange(5, 105, 20))
+    clf = Pipeline(steps=[
+                          ('red', preprocessing.MinMaxScaler()),
+                          ('clf', RandomForestClassifier())])
 
-    best_clf = GridSearchCV(clf, params, n_jobs=32, scoring='roc_auc',
-                            verbose=5, cv=5)
+    params = dict(
+                  clf__n_estimators=np.arange(50, 151, 20),
+                  clf__min_samples_split=np.arange(10, 151, 50),
+                  clf__min_samples_leaf=np.arange(2, 11, 5)
+                  )
 
-    best_clf.fit(X_train, Y_train)
+    clf = GridSearchCV(clf, params, n_jobs=24, scoring='roc_auc',
+                       verbose=0, cv=3)
 
-    joblib.dump(best_clf.best_estimator_, './best_model.pkl')
+    clf.fit(X_train, Y_train)
+    best_clf = clf.best_estimator_
+    print clf.best_score_
+    print clf.best_params_
 
-    print best_clf.best_score_
-    print best_clf.best_params_
+    # clf = LogisticRegressionCV(n_jobs=32, cv=cv, scoring='roc_auc')
+    # clf.fit(X_train, Y_train)
+    # best_clf = clf
+    # print np.max(best_clf.scores_.values())
 
-    return best_clf.best_estimator_
+    # joblib.dump(best_clf, './best_model.pkl')
+
+
+    return best_clf
 
 def train_secondary(X_train, Y_train):
 
-    clf = Pipeline(steps=[('pca', PCA()), ('dt', DecisionTreeClassifier())])
+    clf = Pipeline(steps=[('pca',
+                           feature_selection.SelectFromModel(DecisionTreeClassifier(),
+                                                             threshold=0.05)),
+                           ('dt', DecisionTreeClassifier())])
 
-    params = dict(pca__n_components=np.arange(50, 100, 10),
+    params = dict(
                   dt__max_depth=np.arange(5, 105, 20),
-                  dt__min_samples_split=np.arange(2, 20, 2))
+                  )
 
-    best_clf = GridSearchCV(clf, params, n_jobs=32, scoring='roc_auc',
-                            verbose=5, cv=5)
+    best_clf = GridSearchCV(clf, params, n_jobs=16, scoring='roc_auc',
+                            verbose=0, cv=3)
 
     best_clf.fit(X_train, Y_train)
 
@@ -168,7 +202,10 @@ def train_secondary(X_train, Y_train):
 
 def main():
     X_train, Y_train, X_test = my_features()
+
+
     Y_pred = my_classifier_predictions(X_train,Y_train,X_test)
+    # print Y_pred.shape
     utils.generate_submission("../deliverables/test_features.txt",Y_pred)
     #The above function will generate a csv file of (patient_id,predicted label) and will be saved as "my_predictions.csv" in the deliverables folder.
 

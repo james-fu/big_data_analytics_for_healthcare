@@ -92,7 +92,7 @@ def filter_events(events, indx_date, deliverables_path):
                           mask_diff <= pd.Timedelta(days=2000))
 
     filtered_events = events_w_idx[mask]
-    filtered_events = filtered_events[['patient_id', 'event_id', 'value']]
+    # filtered_events = filtered_events[['patient_id', 'event_id', 'value']]
 
     filtered_events.to_csv(deliverables_path + 'etl_filtered_events.csv',
                            columns=['patient_id', 'event_id', 'value'],
@@ -101,6 +101,13 @@ def filter_events(events, indx_date, deliverables_path):
 
     return filtered_events
 
+def remap_event_ids(filtered_events_df, feature_map_df):
+    joined = filtered_events_df.join(feature_map_df.set_index('event_id'),
+                                     on='event_id')
+
+    filtered_events_df['feature_id'] = joined['idx']
+
+    return filtered_events_df.dropna()
 
 def aggregate_events(filtered_events_df, mortality_df,feature_map_df, deliverables_path):
 
@@ -126,18 +133,11 @@ def aggregate_events(filtered_events_df, mortality_df,feature_map_df, deliverabl
 
     Return filtered_events
     '''
-    test = feature_map_df
 
     # 1. Replace event_id's with index available in event_feature_map.csv
     print('Re-mapping feature ids...')
 
-    joined = filtered_events_df.join(test.set_index('event_id'),
-                               on='event_id')
-
-    filtered_events_df['feature_id'] = joined['idx']
-
-    # 2. Remove events with n/a values
-    filtered_events_df = filtered_events_df.dropna()
+    filtered_events_df = remap_event_ids(filtered_events_df, feature_map_df)
 
 
     # 3. Aggregate events using sum and count to calculate feature value
