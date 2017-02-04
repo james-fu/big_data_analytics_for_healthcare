@@ -1,0 +1,467 @@
+\documentclass[12pt]{article}
+\usepackage{enumitem}
+\usepackage{setspace}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{amsmath, amsthm}
+\RequirePackage[colorlinks]{hyperref}
+\usepackage[lined,boxed,linesnumbered,commentsnumbered]{algorithm2e}
+\usepackage{xcolor}
+\usepackage{listings}
+\lstset{basicstyle=\ttfamily,
+  showstringspaces=false,
+  commentstyle=\color{red},
+  keywordstyle=\color{blue}
+}
+
+% Margins
+\topmargin=-0.45in
+\evensidemargin=0in
+\oddsidemargin=0in
+\textwidth=6.5in
+\textheight=9.0in
+\headsep=0.25in
+
+\linespread{1.1}
+
+% Commands
+\newenvironment{solution}
+  {\begin{proof}[Solution]}
+  {\end{proof}}
+
+\newcommand{\snehaedit}[1]{\textcolor{green}{\emph{[Sneha: #1]}}}
+\newcommand{\hsedit}[1]{\textcolor{magenta}{\emph{[Hang: #1]}}}
+\newcommand{\meeraedit}[1]{\textcolor{red}{\emph{[Meera: #1]}}}
+\newcommand{\prpedit}[1]{\textcolor{blue}{\emph{[Prp: #1]}}}
+
+
+\title{CSE6250: Big Data Analytics in Healthcare \\ Homework 2}
+\author{Jimeng Sun}
+\date{Deadline: February 12, 2017, 11:55 PM AoE}
+
+\begin{document}
+
+\maketitle
+\begin{itemize}
+\item Discussion is encouraged, but each student must write his/her own answers and explicitly mention any collaborators.
+\item Each student is expected to respect and follow \href{http://www.honor.gatech.edu/}{ GT Honor Code}.
+\item Please type the submission with \LaTeX or Microsoft Word. We don't accept hand written submission.
+\item Please do not change the names and function definitions in the skeleton code provided,  as  this  will  cause  the  test  scripts  to  fail  and  subsequently  no  points  will  be awarded. Built-in  modules  of  python  and  the  following  libraries - numpy, scipy, scikit-learn can be used.
+\end{itemize}
+
+\section*{Overview}
+Accurate knowledge of a patient's condition is critical. Electronic monitoring systems and health records provide rich information for performing predictive analytics. In this homework, you will use ICU clinical data to predict the mortality of patients in one month after discharge.
+
+It is your responsibility to make sure that all code and other deliverables are in the correct format and that your submission compiles and runs.  We will not manually check your code. Thus non-runnable code will directly lead to 0 score.
+
+\newpage
+\section*{About Code Skeleton and Raw Data}
+You have already downloaded the homework2 tar file from T-Square. After extract the file, you should have below files
+\begin{lstlisting}[frame=single, language=bash]
+hw2
+|-- code
+| |-- environment.yml
+| |-- hive
+| | \-- event_statistics.hql
+| |-- lr
+| | |-- lrsgd.py
+| | |-- mapper.py
+| | |-- reducer.py
+| | |-- test.py
+| | |-- testensemble.py
+| | |-- train.py
+| | \-- utils.py
+| |-- pig
+| |  |-- etl.pig
+| |  \-- utils.py
+| |-- zeppelin
+| |   |-- bdh_hw2_zeppelin.json
+| \-- test
+|    |-- event.csv
+|    |-- expected
+|    |  |-- aliveevents.csv
+|    |  |-- deadevents.csv
+|    |  |-- features
+|    |  |-- features_aggregate.csv
+|    |  |-- features_map.csv
+|    |  |-- features_normalized.csv
+|    |  |-- filtered.csv
+|    |  |-- samples
+|    |  \-- statistics.txt
+|    \-- mortality.csv
+|-- data
+| |-- events.csv
+| \-- mortality.csv
+|-- homework2.pdf
+\-- homework2.tex
+\end{lstlisting}
+
+% \subsection*{Download code}
+% For this hw, we put code on github. You will need to download it via
+% \begin{lstlisting}[frame=single, language=bash]
+% cd hw2 #navigate to hw directory
+% git clone https://github.gatech.edu/hsu34/bdh-hw2.git code
+% \end{lstlisting}
+
+\subsection*{About data}
+When you browse to the $hw2/data/$, there are two CSV files which will be the input data in this assignment. 
+
+The data provided in \textit{$events.csv$} are event sequences. Each line of this file consists of a tuple with the format \textit{(patient\textunderscore id, event\textunderscore id, event\textunderscore description, timestamp, value)}. 
+
+For example, 
+
+\begin{lstlisting}[frame=single, language=bash]
+1053,DIAG319049,Acute respiratory failure,2924-10-08,1.0
+1053,DIAG197320,Acute renal failure syndrome,2924-10-08,1.0
+1053,DRUG19122121,Insulin,2924-10-08,1.0
+1053,DRUG19122121,Insulin,2924-10-11,1.0
+1053,LAB3026361,Erythrocytes in Blood,2924-10-08,3.000
+1053,LAB3026361,Erythrocytes in Blood,2924-10-08,3.690
+1053,LAB3026361,Erythrocytes in Blood,2924-10-09,3.240
+1053,LAB3026361,Erythrocytes in Blood,2924-10-10,3.470
+\end{lstlisting}
+
+\begin{itemize}
+\item \textbf{patient\textunderscore id}: Identifies the patients in order to differentiate them from others. For example, the patient in the example above has patient id 1053. 
+\item \textbf{event\textunderscore id}: Encodes all the clinical events that a patient has had. For example, DRUG19122121 means that a drug with RxNorm code as 19122121 was prescribed to the patient. DIAG319049 means the patient was diagnosed of disease with SNOMED code of 319049 and LAB3026361 means that the laboratory test with a LOINC code of 3026361 was performed on the patient.
+\item $\textbf{event\textunderscore description}$: Shows the description of the event. For example, DIAG319049 is the code for Acute respiratory failure and DRUG19122121 is the code for Insulin. 
+\item \textbf{timestamp}: Indicates the date at which the event happened. Here the timestamp is not a real date but a shifted date for protecting privacy of patients.
+\item \textbf{value}: Contains the value associated to an event. See Table~\ref{tbl:value} for the detailed description.
+\end{itemize}
+
+\begin{table}[th]
+\centering
+\begin{tabular}{@{}llp{4cm}l@{}}
+\toprule
+event type & sample event\textunderscore id & value meaning & example \\ \midrule
+diagnostic code & DIAG319049 & diagnosed with a certain disease, value always be 1.0 & 1.0 \\
+drug consumption  & DRUG19122121  & prescribed a certain medication, value will always be 1.0 & 1.0 \\
+laboratory test & LAB3026361 & test conducted on a patient and its value & 3.690 \\ \bottomrule
+\end{tabular}
+\caption{Event sequence value explanation}
+\label{tbl:value}
+\end{table}
+
+The data provided in \textit{mortality\textunderscore events.csv} contains the patient ids of only the deceased people. They are in the form of a tuple with the format \textit{(patient\textunderscore id, timestamp, label)}. For example,
+\begin{lstlisting}[frame=single, language=bash]
+37,3265-12-31,1
+40,3202-11-11,1
+\end{lstlisting}
+
+The timestamp indicates the death date of a deceased person and a label of 1 indicates death. Patients that are not mentioned in this file are considered alive.
+
+\newpage
+\section{Logistic Regression [25 points]}
+A Logistic Regression classifier can be trained with historical health-care data to make future predictions. A training set $D$ is composed of $\{(\mathbf{x}_i, y_i)\}_1^N$, where $y_i \in \{0, 1\}$ is the label and $\mathbf{x}_i\in\mathbf{R}^d$ is the feature vector of the $i$-th patient. In logistic regression we have $p(y_i = 1 | \mathbf{x}_i) = \sigma(\mathbf{w}^T\mathbf{x}_i)$, where $\mathbf{w}\in\mathbf{R}^d$ is the learned coefficient vector and $\sigma(t) = \frac{1}{1 + e^{-t}}$ is the sigmoid function. 
+
+Suppose your system continuously collects patient data and predicts patient severity using Logistic Regression. When patient data vector $\mathbf{x}$ arrives to your system, the system needs to predict whether the patient has a severe condition (predicted label $\hat{y} \in \{0, 1\}$) and requires immediate care or not. The result of the prediction will be delivered to a physician, who can then take a look at the patient. Finally, the physician will provide feedback (truth label $y \in \{0, 1\}$) back to your system so that the system can be upgraded, i.e. $\mathbf{w}$ recomputed, to make better predictions in the future.
+
+\subsection{Batch Gradient Descent}
+
+
+The negative log-likelihood can be calculated according to
+\begin{center}
+$NLL\left (D, \mathbf{w} \right ) = -\sum_{i=1}^{N} \left [ \left ( 1 - y_i \right ) \log(1-\sigma(\mathbf{w}^T\mathbf{x}_i)) + y_i\log \sigma(\mathbf{w}^T\mathbf{x}_i)  \right ]$ \end{center}
+The maximum likelihood estimator $\mathbf{w}_{\text{MLE}}$ can be found by solving for $\underset{\mathbf{w}}{\operatorname{arg\min}}$ $NLL$ through an iterative gradient descent procedure.\\
+
+\textbf{a.} Derive the gradient of the negative log-likelihood in terms of $\mathbf{w}$ for this setting. [5 points] 
+
+\subsection{Stochastic Gradient Descent}
+If $N$ and $d$ are very large, it may be prohibitively expensive to consider every patient in $D$ before applying an update to $\mathbf{w}$. One alternative is to consider stochastic gradient descent, in which an update is applied after only considering a single patient. \\
+
+\textbf{a.} Show the log likelihood, $l$, of a single $(\mathbf{x}_t, y_t)$ pair. [5 points]
+
+\textbf{b.} Show how to update the coefficient vector $\mathbf{w}_t$ when you get a patient feature vector $\mathbf{x}_t$ and physician feedback label $y_t$ at time $t$ using $\mathbf{w}_{t-1}$ (assume learning rate $\mathbf{\eta}$ is given). [5 points]
+
+\textbf{c.} What is the time complexity of the update rule from $\mathbf{b}$ if $\mathbf{x}_t$ is very sparse? [2 points]
+
+\textbf{d.} Briefly explain the consequence of using a very large $\mathbf{\eta}$ and very small $\mathbf{\eta}$. [3 points]
+
+\textbf{e.} Show how to update $\mathbf{w}_t$ under the penalty of L2 norm regularization. In other words, update $\mathbf{w}_t$ according to $l - \mu \|\mathbf{w}\|_2^2 $, where $\mathbf{\mu}$ is a constant. What's the time complexity? [5 points]
+
+\textbf{f.} When you use L2 norm, you will find each time you get a new $(\mathbf{x}_t, y_t)$ you need to update every element of vector $\mathbf{w}_t$ even if $\mathbf{x}_t$ has very few non-zero elements. Write the pseudo-code on how to update $\mathbf{w}_t$ lazily. [Extra 5 points] \\
+
+\textbf{HINT}: Update $j$-th element of $\mathbf{w}_{t}$, $\mathbf{w}_{tj}$, only when $j$-th element of $\mathbf{x}_{t}$, $\mathbf{x}_{tj}$, is non-zero. You can refer to Sec.10 and 11 and the appendix of this \href{http://lingpipe.files.wordpress.com/2008/04/lazysgdregression.pdf}{paper}. 
+
+
+\section{Programming [75 points]}
+First, follow the \href{http://www.sunlab.org/teaching/cse8803/fall2016/lab/environment/}{instructions} to install the environment if you haven't done that yet. Then you need to use the $hw2/data/$ from T-Square. 
+
+\subsection{Descriptive Statistics [10 points]}
+Computing statistics on the data aids in developing predictive models. In this homework, you need to write HIVE code that computes various metrics on the data. A skeleton code is provided as a starting point.
+
+The definition of terms used in the result table are described below:
+\begin{itemize}
+\item \textbf{Event count}: Number of events recorded for a given patient. Note that every line in the input file is an event. 
+\item \textbf{Encounter count}: Count of unique dates on which a given patient visited the ICU.
+\item \textbf{Record length}: Duration (in number of days) between first event and last event for a given patient.
+\item \textbf{Common Diagnosis}: 5 Most frequently occurring disease.
+\item \textbf{Common Laboratory Test}: 5 Most frequently conducted test.
+\item \textbf{Common Medication}: 5 Most frequently prescribed medication.
+\end{itemize}
+While counting common diagnoses, lab tests and medications, count all the occurrences of the codes. e.g. if one patient has the same code 3 times, the total count on that code should include all 3. Furthermore, the count is not per patient but per code.
+
+\textbf{a.} Complete \textit{hive/event\_statistics.hql} for computing statistics required in the question. Please be aware that \textbf{\color{red} you are not allowed to change the filename.} 
+
+\textbf{b.} Use \textit{events.csv} and \textit{mortality.csv} provided in \textbf{data} as input and fill Table~\ref{tbl:stat} with actual values. We only need the top 5 codes for common diagnoses, labs and medications. Their respective counts are not required. \\
+
+\begin{table}[th]
+\centering
+\begin{tabular}{@{}l|l|l}
+\toprule
+Metric & Deceased patients & Alive patients  \\ \hline
+Event Count & &  \\ 
+1. Average Event Count && \\
+2. Max Event Count  &&\\
+3. Min Event Count  &&\\ \hline
+
+Encounter Count & &  \\ 
+1. Average Encounter Count  &&\\
+2. Max Encounter Count  &&\\
+3. Min Encounter Count  &&\\ \hline
+
+Record Length & &  \\ 
+1. Average Record Length &&\\
+2. Max Record Length&& \\
+3. Min Record Length&& \\ \hline
+
+Common Diagnosis & &  \\ \hline
+
+Common Laboratory Test & &  \\ \hline
+
+Common Medication & &  \\ 
+\bottomrule
+\end{tabular}
+\caption{Descriptive statistics for alive and dead patients}
+\label{tbl:stat}
+\end{table} 
+
+\textbf{Deliverable: code/hive/event\_statistics.hql [10 points]}
+
+\subsection{Transform data [20 points]}
+In this problem we will convert the raw data to standardized format using Pig. Diagnostic, medication and laboratory codes for each patient should be used to construct the feature vector and the feature vector should be represented in \href{http://svmlight.joachims.org/}{SVMLight} format. You will work with \textit{events.csv} and \textit{mortality.csv} files provided in \textbf{data} folder. 
+
+Listed below are a few concepts you need to know before beginning feature construction (for details please refer to lectures). 
+
+\begin{itemize}
+\item Observation Window: The time interval you will use to identify relevant events. Only events present in this window should be included while constructing  feature vectors. The size of observation window is 2000 days(including 2000). 
+\item Prediction Window: A fixed time interval that is to be used to make the prediction. Events in this interval should not be included while constructing feature vectors. The size of prediction window is 30 days. 
+\item Index date: The day on which mortality is to be predicted. Event occured at index date should be considered within observation window. Index date is evaluated as follows:
+\begin{itemize}
+\item For deceased patients: Index date is 30 days prior to the death date (timestamp field) in \textit{mortality.csv}. 
+\item For alive patients: Index date is the last event date in \textit{events.csv} for each alive patient. 
+\end{itemize}
+\end{itemize}
+
+You will work with the following files in \textit{code/pig} folder
+\begin{itemize}
+\item \textbf{etl.pig}: Complete this script based on provided skeleton. 
+\item \textbf{utils.py}: Implement necessary User Defined Functions (UDF) in Python in this file (optional).
+\end{itemize}
+
+In order to convert raw data from events to features, you will need a few steps:
+\begin{enumerate}
+\item \emph{Compute the index date:}[5 points] Use the definition provided above to compute the index date for all patients. 
+
+\item \emph{Filter events:}[5 points] Consider an observation window (2000 days) and prediction window (30 days).
+Remove the events that occur outside the observation window. 
+
+\item \emph{Aggregate events:} [5 points] To create features suitable for machine learning, we will need to aggregate the events for each patient as follows:
+  \begin{itemize}
+  \item \textbf{count:} occurrence for diagnostics, lab and medication events (i.e. event\_id starting with DRUG, LAB and DIAG respectively) to get their counts.  
+  \end{itemize}
+  
+Each event type will become a feature and we will directly use event\_id as feature name. For example, given below raw event sequence for a patient, \\
+
+\begin{lstlisting}[frame=single]
+1053,DIAG319049,Acute respiratory failure,2924-10-08,1.0
+1053,DIAG197320,Acute renal failure syndrome,2924-10-08,1.0
+1053,DRUG19122121,Insulin,2924-10-08,1.0
+1053,DRUG19122121,Insulin,2924-10-11,1.0
+1053,LAB3026361,Erythrocytes in Blood,2924-10-08,3.000
+1053,LAB3026361,Erythrocytes in Blood,2924-10-08,3.690
+1053,LAB3026361,Erythrocytes in Blood,2924-10-09,3.240
+1053,LAB3026361,Erythrocytes in Blood,2924-10-10,3.470
+\end{lstlisting}
+
+We can get feature value pairs($event\_id$, $value$) for this patient with ID \textit{1053} as \\
+\begin{lstlisting}[frame=single]
+(DIAG319049, 1)
+(DIAG197320, 1)
+(DRUG19122121, 2)
+(LAB3026361, 4)
+\end{lstlisting}
+
+
+\item \emph{Generate feature mapping:} [5 points]
+In above result, you see the feature value as well as feature name($event\_id$ here). Next, you need to assign an unique identifier for each feature. Sort all unique feature names in ascending alphabetical order and assign continuous feature id starting from 0. Thus above result can be mapped to
+
+\begin{lstlisting}[frame=single]
+(1, 1)
+(0, 1)
+(2, 2)
+(3, 4)
+\end{lstlisting}
+
+\iffalse
+\item \emph{Imputation:}[10 points]
+Physicians order lab tests for patient on demand, thus we don't have average lab value as feature if patient don't have such test. This is a missing value problem. For a given feature, if its value is not missing from a few patients(more than 10 patients here in this problem), one can use average value of non-missing to replace missing, this is called the \href{http://missingdata.lshtm.ac.uk/index.php?option=com_content&view=article&id=68:simple-mean-imputation&catid=39:simple-ad-hoc-methods-for-coping-with-missing-data&Itemid=96}{Simple Mean Imputation}.
+\fi
+
+\item \emph{Normalization:}[5 points] Further, in machine learning algorithm like logistic regression, it is important to normalize different features into the same scale using an approach like  \href{http://stats.stackexchange.com/questions/70801/how-to-normalize-data-to-0-1-range}{min-max normalization} (hint: $min(x_i)$ maps to 0 and $max(x_i)$ 1 for feature $x_i$, $min(x_i)$ is zero for \textbf{count} aggregated features). 
+
+\item \emph{Save in  SVMLight format:} If the dimensionality of a feature vector is large but the feature vector is sparse (i.e. it has only a few nonzero elements), sparse representation should be employed. In this problem you will use the provided data for each patient to construct a feature vector and represent the feature vector in \href{http://svmlight.joachims.org/}{SVMLight} format. \\
+
+\begin{lstlisting}[frame=single, language=bash]
+<line> .=. <target> <feature>:<value> <feature>:<value> 
+<target> .=. +1 | -1 | 0 | <float> 
+<feature> .=. <integer> | qid
+<value> .=. <float>
+<info> .=. <string>
+\end{lstlisting}
+
+For example, the feature vector in SVMLight format will look like: \\
+
+\begin{lstlisting}[frame=single, language=bash]
+1 2:0.5 3:0.12 10:0.9 2000:0.3
+0 4:1.0 78:0.6 1009:0.2
+1 33:0.1 34:0.98 1000:0.8 3300:0.2
+1 34:0.1 389:0.32 
+\end{lstlisting}
+
+where, 1 or 0 will indicate whether the patient is dead or alive i.e. the label and it will be followed by a series of feature-value pairs sorted by the feature index (idx) value. 
+\newline
+\end{enumerate}
+To run your pig script in local mode, you will need the command:  
+\begin{lstlisting}[frame=single,language=bash]
+sudo pig -x local etl.pig
+\end{lstlisting}
+
+\textbf{Deliverable: pig/etl.pig and pig/utils.py [20 points]}
+
+\subsection{SGD Logistic Regression [15 points]}
+In this question, you are going to implement your own Logistic Regression classifier in python using the equations you derived in question \textbf{1.2.e}. To help you get started, we have provided a skeleton code. You will find the relevant code files in \textit{lr} folder. You will train and test a classifier by running 
+\begin{enumerate}
+\item cat path/to/train/data \textbar{} python train.py -f $<$number of features$>$
+\item cat path/to/test/data \textbar{} python test.py 
+\end{enumerate}
+Training and testing data of this problem will be output from previous Pig ETL problem.
+
+To better understand the performance of your classifier, you will need to use standard metrics like AUC. Similarly with Homework1, we provide \textit{code/environment.yml} which contains a list of libraries needed to set environment
+for this homework. You can use it to create a copy of conda `environment' (\href{http://conda.pydata.org/docs/using/envs.html#use-environment-from-file}{http://conda.pydata.org/docs/using/envs.html\#use-environment-from-file}). If you already have your own Python development environment (it should be Python 2.7), please refer to this file to find necessary libraries. It will help you install necessary modules for drawing ROC curve. The environment is tested in Vagrant VM. You may need to modify it if you want to install it somewhere else. Remember to restart the terminal after installation.
+
+\textbf{a.} Update the \textbf{lrsgd.py} file. You are allowed to add extra methods, but please make sure the existing method names and parameters remain unchanged. Use \href{https://docs.python.org/2/library/}{standard modules} of Python 2.7 only, as we will not guarantee the availability of any third party modules while testing your code. [10 points]
+
+\textbf{b.} Show the ROC curve generated by test.py in this writing report for different learning rates $\eta$ and regularization parameters $\mu$ combination and briefly explain the result. [5 points]
+
+\textbf{c.} [Extra 10 points] Implement using the result of question \textbf{1.2.f}, and show the speed up. Test efficiency of your approach using larger data set \textit{training.data}, which has 5675 possible distinct features. Save the code in a new file lrsgd\_fast.py. We will test whether your code can finish witin reasonable amount of time and correctness of trained model. The training and testing data set can be downloaded from:
+
+\begin{lstlisting}[frame=single,language=bash]
+https://s3.amazonaws.com/cse8803bdh/hw2/training.data 
+https://s3.amazonaws.com/cse8803bdh/hw2/testing.data
+\end{lstlisting}
+
+
+
+\textbf{Deliverable: lr/lrsgd.py and optional lr/lrsgd\_fast.py [15 points]}
+
+\subsection{Hadoop [15 points]}
+In this problem, you are going to train multiple logistic regression classifiers using your implementation of previous problem with Hadoop in parallel. The pseudo code of Mapper and Reducer are listed as Algorithm~\ref{algo_map} and Algorithm~\ref{algo_reduce} respectively. We have already written the code for the reducer for you. Find related files in \textit{lr} folder.
+
+\begin{algorithm}
+\SetKwFunction{Random}{Random}\SetKwFunction{Emit}{Emit}
+\SetKwInOut{Input}{input}\SetKwInOut{Output}{output}
+\Input{Ratio of sampling $r$, number of models $M$, input pair $(k,v)$}
+\Output{key-value pairs}
+\BlankLine
+\For{$i\leftarrow 1$ \KwTo $M$}{
+$m\leftarrow$\Random\;
+\If{$m < r$}{
+\Emit($i,v$)
+}
+}
+\caption{Map function}\label{algo_map}
+\end{algorithm}
+
+\begin{algorithm}
+\SetKwInOut{Input}{input}\SetKwInOut{Output}{output}
+\Input{$(k,v)$}
+\Output{Trained model}
+Fit model on $v$\;
+\caption{Reduce function}\label{algo_reduce}
+\end{algorithm}
+You need to copy \textit{training} (the output of Pig ETL) into HDFS using command line.
+\begin{lstlisting}[language=bash,frame=single]
+hdfs dfs -mkdir hw2
+hdfs dfs -put pig/training hw2/ #  adjust training's path ondemand
+\end{lstlisting}
+\textbf{a.} complete the \textbf{mapper.py} according to pseudo code. [5 points]\\
+You could train 5 ensembles by invoking
+\begin{lstlisting}[language=bash,frame=single]
+hadoop jar \
+   /usr/lib/hadoop-mapreduce/hadoop-streaming.jar \
+  -D mapreduce.job.reduces=5    \
+  -files lr \
+  -mapper "python lr/mapper.py -n 5 -r 0.4" \
+  -reducer "python lr/reducer.py -f <number of features>" \
+  -input hw2/training \
+  -output hw2/models
+\end{lstlisting}
+Notice that you could apply other parameters to reducer. To test the performance of ensembles, copy the trained models to local via
+\begin{lstlisting}[language=bash,frame=single]
+hdfs dfs -get hw2/models
+\end{lstlisting}
+\textbf{b.} Complete the \textbf{testensemble.py} to generate the ROC curve. [5 points]
+\begin{lstlisting}[language=bash,frame=single]
+cat pig/testing/* | python lr/testensemble.py -m models
+\end{lstlisting}
+\textbf{c.} Compare the performance with that of previous problem and briefly analyze why the difference. [5 points]
+
+\subsection{Zeppelin [10 points]}
+\href{http://zeppelin.apache.org/}{Apache Zeppelin} is an web based notebook that enables interactive data analytics (like Jupyter).
+Because you can execute your code piecewise interactively, you're encouraged to use this at the initial stage your development for fast prototyping and initial data exploration. Check out the course lab \href{http://www.sunlab.org/teaching/cse8803/fall2016/lab/zeppelin-intro/}{pages} for a brief introduction on how to set it up and use it. Please fill in the TODO section of the JSON file, \texttt{zeppelin\textbackslash bdh\_hw2\_zeppelin.json}. Import this notebook file on Zeppelin first.
+For easier start, we will read in the dataset we have been using in the lab, events.csv and mortality.csv, first in this part. Read carefully the provided comments in the Notebook and fill-in the TODO section:
+
+\begin{itemize}
+\item \textbf{Event count}: Number of events recorded for a given patient. Note that every line in the input file is an event. [3 points]
+\item For the average, maximum and minimum event counts, show the breakdown by dead or alive. Produce a chart like below (please note that values and axis labels here are for illustrative purposes only and maybe different with the actual data): [2 points]\\
+\includegraphics[height=2in]{Events.PNG}
+\item \textbf{Encounter count}: Count of unique dates on which a given patient visited the ICU. All the events: DIAG, LAB and DRUG - should be considered as ICU visiting events.[3 points]
+\item For the average, maximum and minimum encounter counts, show the breakdown by dead or alive. Produce a chart like below (please note that values and axis labels here are for illustrative purposes only and maybe different with the actual data): [2 points]\\
+\includegraphics[height=2in]{Encounters.PNG}
+\end{itemize}
+Fill in the indicated TODOs in the notebook using ONLY Scala.\\
+
+Please be aware that \textbf{\color{red} you are NOT allowed to change the filename and any existing function declarations.}\\
+
+\textbf{Deliverable: \texttt{zeppelin\textbackslash bdh\_hw2\_zeppelin.json}[10 points]}
+
+
+\subsection{Submission [5 points]}
+The folder structure of your submission should be as below. You can display fold structure using \textit{tree} command. All other unrelated files will be discarded during testing.
+\begin{lstlisting}[language=bash,frame=single]
+<your gtid>-<your gt account>-hw2
+|-- code
+| |-- hive
+| | \-- event_statistics.hql
+| |-- lr
+| | |-- lrsgd.py
+| | |-- lrsgd_fast.py (Optional)
+| | |-- mapper.py
+| | \-- testensemble.py
+| |-- pig
+| |  |-- etl.pig
+| |  \-- utils.py
+| \-- zeppelin
+|    \-- bdh_hw2_zeppelin.json
+\-- homework2answer.pdf
+\end{lstlisting}
+
+Please create a tar archive of the folder above with the following command and submit the tar file.
+\begin{lstlisting}[language=bash,frame=single]
+tar -czvf <your gtid>-<your gt account>-hw2.tar.gz \
+  <your gtid>-<your gt account>-hw2
+\end{lstlisting}
+Example submission: 901234567-gburdell3-hw2.tar.gz
+\end{document}
