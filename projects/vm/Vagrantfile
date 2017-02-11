@@ -1,0 +1,113 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+require "yaml"
+
+_config = YAML.load(File.open(File.join(File.dirname(__FILE__), "vagrantconfig.yaml"), File::RDONLY).read)
+CONF = _config
+
+# Override vagrant configurations using environment variables
+keys = CONF.keys
+keys.each do |k|
+  if ENV[k.upcase] != nil then
+    puts "Overide from environment variable: " + k.upcase + " = " + ENV[k.upcase]
+    if /^\d+/.match(ENV[k.upcase])
+      CONF[k] = Integer(ENV[k.upcase])
+    else
+      CONF[k] = ENV[k.upcase]
+    end
+  end
+end
+
+# Repository
+# Example for testing a Release candidate.
+repo = CONF['repo']
+
+# Which Linux Distribution to use. Right now only centos is tested
+distro = 'centos'
+
+# hadoop ecosystem components
+components = CONF['components']
+
+# JDK package name
+jdk = CONF['jdk']
+
+# master node hostname
+bigtop_master = "bigtop1.vagrant"
+
+$script = <<SCRIPT
+# service iptables stop
+# chkconfig iptables off
+# cat /dev/null > /etc/hosts
+echo "Bigtop yum repo = #{repo}"
+# Prepare puppet configuration file
+mkdir -p /etc/puppet/hieradata
+cp /bootcamp/docker/puppet/hiera.yaml /etc/puppet
+cp -r /bootcamp/docker/puppet/hieradata/bigtop/ /etc/puppet/hieradata/
+cat > /etc/puppet/hieradata/site.yaml << EOF
+bigtop::hadoop_head_node: #{bigtop_master}
+hadoop::hadoop_storage_dirs: [/data/1, /data/2]
+bigtop::bigtop_repo_uri: #{repo}
+hadoop_cluster_node::cluster_components: #{components}
+bigtop::jdk_package_name: #{jdk}
+EOF
+SCRIPT
+
+VAGRANTFILE_API_VERSION = "2"
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+  # manage /etc/hosts by hostmanager plugin(https://github.com/smdahlen/vagrant-hostmanager)
+  # use vagrant-cachier to cache packages at local(https://github.com/fgrehm/vagrant-cachier)
+  # config.hostmanager.enabled = true
+
+  config.ssh.insert_key = false
+
+  # nodes definition
+  config.vm.define "bigtop1" do |bigtop|
+    bigtop.vm.box = CONF['box']
+    bigtop_hostname="bigtop1.vagrant"
+    bigtop_ip="10.10.10.11"
+
+    bigtop.vm.provider :virtualbox do |vb|
+      vb.customize ["modifyvm", :id, "--ioapic", "on"]
+      vb.customize ["modifyvm", :id, "--memory", CONF['memory_size']]
+      vb.customize ['modifyvm', :id, '--cpus', CONF['number_cpus']]
+    end
+
+    bigtop.vm.network :private_network, ip: bigtop_ip
+    bigtop.vm.hostname = bigtop_hostname
+
+    # three levels up is the bigtop "home" directory.
+    # the current directory has puppet recipes which we need for provisioning.
+    bigtop.vm.synced_folder "../", "/bootcamp"
+
+    # carry on w/ installation
+    bigtop.vm.provision :shell do |shell|
+      shell.path = "setup-env-centos.sh"
+    end
+    bigtop.vm.provision "shell", inline: $script
+    # bigtop.vm.provision :hostmanager
+
+    # deploy Apache Hadoop and it's ecosystem
+    bigtop.vm.provision :puppet do |puppet|
+      puppet.module_path = "../docker/puppet/modules/"
+      puppet.manifests_path =  "../docker/puppet/manifests/"
+      puppet.manifest_file  = "site.pp"
+      puppet.options = "--debug"
+    end
+  end
+end

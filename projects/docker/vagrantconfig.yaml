@@ -1,0 +1,15 @@
+docker:
+        memory_size: "2048"
+        image: "cluster:centos-7.0"
+
+coreos:
+        memory_size: "4196"
+        number_cpus: "2"
+
+repo: "http://bigtop01.cloudera.org:8080/view/Releases/job/Bigtop-1.0.0-rpm/BUILD_ENVIRONMENTS=centos-7%2Clabel=docker-slave-06/3/artifact/output/"
+# repo: "http://bigtop01.cloudera.org:8080/view/Releases/job/Bigtop-0.8.0/label=centos6/6/artifact/output/"
+components: [hadoop, yarn, pig, hive, hbase, spark]
+namenode_ui_port: "50070"
+yarn_ui_port: "8088"
+hbase_ui_port: "60010"
+jdk: "java-1.7.0-openjdk-devel.x86_64"
