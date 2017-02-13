@@ -17,10 +17,14 @@ random.seed(8803)
 
 for line in sys.stdin:
     # TODO
-    # Note: The following lines are only there to help 
-    #       you get started (and to have a 'runnable' program). 
+    # Note: The following lines are only there to help
+    #       you get started (and to have a 'runnable' program).
     #       You may need to change some or all of the lines below.
     #       Follow the pseudocode given in the PDF.
-    key = random.randint(0, options.n_model - 1)
-    value = line.strip()
-    print "%d\t%s" % (key, value)
+
+    m = random.random()
+
+    if m < options.ratio:
+        key = random.randint(0, options.n_model - 1)
+        value = line.strip()
+        print "%d\t%s" % (key, value)
