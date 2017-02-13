@@ -84,8 +84,8 @@ aliveevents = FOREACH aliveevents
 /*--TEST-1*/
 deadevents = ORDER deadevents BY patientid, eventid;
 aliveevents = ORDER aliveevents BY patientid, eventid;
-/*STORE aliveevents INTO 'aliveevents' USING PigStorage(',');*/
-/*STORE deadevents INTO 'deadevents' USING PigStorage(',');*/
+STORE aliveevents INTO 'aliveevents' USING PigStorage(',');
+STORE deadevents INTO 'deadevents' USING PigStorage(',');
 
 /*-- ****************************************************************************/
 /*-- Filter events within the observation window and remove events with missing values*/
@@ -96,7 +96,7 @@ filtered = UNION aliveevents, deadevents;-- contains only events for all patient
 filteredgrpd = GROUP filtered BY 1;
 filtered = FOREACH filteredgrpd GENERATE FLATTEN(filtered);
 filtered = ORDER filtered BY patientid, eventid,time_difference;
-/*STORE filtered INTO 'filtered' USING PigStorage(',');*/
+STORE filtered INTO 'filtered' USING PigStorage(',');
 
 /*-- ****************************************************************************/
 /*-- Aggregate events to create features*/
@@ -107,7 +107,7 @@ featureswithid = FOREACH filteredgrpd GENERATE FLATTEN(group) AS (patientid, eve
 
 /*--TEST-3*/
 featureswithid = ORDER featureswithid BY patientid, eventid;
-/*STORE featureswithid INTO 'features_aggregate' USING PigStorage(',');*/
+STORE featureswithid INTO 'features_aggregate' USING PigStorage(',');
 
 /*-- ****************************************************************************/
 /*-- Generate feature mapping*/
@@ -119,7 +119,7 @@ all_features = FOREACH all_features GENERATE rank_all_features AS idx,  eventid;
 
 
 -- store the features as an output file
-/*STORE all_features INTO 'features' using PigStorage(' ');*/
+STORE all_features INTO 'features' using PigStorage(' ');
 
 features = JOIN featureswithid BY eventid FULL OUTER, all_features BY eventid;
 
@@ -129,7 +129,7 @@ features = FOREACH features GENERATE featureswithid::patientid as patientid,
 
 /*--TEST-4*/
 features = ORDER features BY patientid, idx;
-/*STORE features INTO 'features_map' USING PigStorage(',');*/
+STORE features INTO 'features_map' USING PigStorage(',');
 
 /*-- ****************************************************************************/
 /*-- Normalize the values using min-max normalization*/
@@ -147,7 +147,7 @@ features = FOREACH normalized GENERATE features::patientid AS patientid,
 
 /*--TEST-5*/
 features = ORDER features BY patientid, idx;
-/*STORE features INTO 'features_normalized' USING PigStorage(',');*/
+STORE features INTO 'features_normalized' USING PigStorage(',');
 
 -- ***************************************************************************
 -- Generate features in svmlight format

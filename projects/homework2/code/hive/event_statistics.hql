@@ -78,20 +78,20 @@ WHERE m.patient_id IS NULL;
 -- -- for alive and dead patients respectively
 -- -- ************************************************
 -- -- alive patients
-SELECT avg(event_count), min(event_count), max(event_count)
+-- SELECT avg(event_count), min(event_count), max(event_count)
+-- -- -- ***** your code below *****
+-- FROM (SELECT COUNT(patient_id) AS event_count FROM alive_events GROUP BY
+-- patient_id) t2;
+
+
+
+
+
+-- -- dead patients
+-- SELECT avg(event_count), min(event_count), max(event_count)
 -- -- ***** your code below *****
-FROM (SELECT COUNT(patient_id) AS event_count FROM alive_events GROUP BY
-patient_id) t2;
-
-
-
-
-
--- dead patients
-SELECT avg(event_count), min(event_count), max(event_count)
--- ***** your code below *****
-FROM (SELECT COUNT(patient_id) AS event_count FROM dead_events GROUP BY
-patient_id) t2;
+-- FROM (SELECT COUNT(patient_id) AS event_count FROM dead_events GROUP BY
+-- patient_id) t2;
 
 
 

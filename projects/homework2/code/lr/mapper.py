@@ -15,7 +15,7 @@ options, args = parser.parse_args(sys.argv)
 
 random.seed(8803)
 
-for line in sys.stdin:
+for ind, line in enumerate(sys.stdin):
     # TODO
     # Note: The following lines are only there to help
     #       you get started (and to have a 'runnable' program).
@@ -25,6 +25,6 @@ for line in sys.stdin:
     m = random.random()
 
     if m < options.ratio:
-        key = random.randint(0, options.n_model - 1)
+        key = ind #random.randint(0, options.n_model - 1)
         value = line.strip()
         print "%d\t%s" % (key, value)
