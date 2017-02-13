@@ -8,6 +8,7 @@ from optparse import OptionParser
 
 from sklearn.metrics import roc_curve, auc
 from sklearn.datasets import load_svmlight_file
+import numpy as np
 
 import matplotlib
 matplotlib.use('Agg')
@@ -33,7 +34,12 @@ def predict_prob(classifiers, X):
     predict the probability of positive label.
     (Return the average obtained from all the classifiers)
     """
-    pass
+
+    predictions = []
+    for clf in classifiers:
+        predictions.append(clf.predict_prob(X))
+
+    return np.mean(predictions)
 
 
 if __name__ == '__main__':
@@ -41,8 +47,8 @@ if __name__ == '__main__':
     parser.add_option("-m", "--model-path", action="store", dest="path",
                       default="models", help="path where trained classifiers are saved")
     parser.add_option("-r", "--result", action="store", dest="result",
-                      default="roc", help="name of the figure")
-    
+                      default="roc_ensemble", help="name of the figure")
+
     options, args = parser.parse_args(sys.argv)
 
     files = [options.path + "/" +
