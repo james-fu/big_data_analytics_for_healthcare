@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-memory_size: 8192
+memory_size: 16384
 number_cpus: 16
 box: "puppetlabs/centos-6.6-64-nocm"
 repo: http://bigtop-repos.s3.amazonaws.com/releases/1.0.0/centos/6/x86_64
