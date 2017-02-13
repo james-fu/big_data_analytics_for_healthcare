@@ -23,7 +23,7 @@ class LogisticRegressionSGD:
         yhat = self.predict_prob(X)
         for i in X:
             grad = y - (yhat * i[1])
-            self.weight[i[0]] = self.weight[i[0]] + self.eta * grad + self.eta * self.mu * self.weight[i[0]]
+            self.weight[i[0]] = self.weight[i[0]] + (self.eta * grad - self.eta * self.mu * self.weight[i[0]])
 
     def predict(self, X):
         """
