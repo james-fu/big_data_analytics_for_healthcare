@@ -15,18 +15,18 @@ import org.apache.spark.mllib.linalg.distributed.RowMatrix
 object NMF {
 
   /**
-   * Run NMF clustering 
-   * @param V The original non-negative matrix 
+   * Run NMF clustering
+   * @param V The original non-negative matrix
    * @param k The number of clusters to be formed, also the number of cols in W and number of rows in H
    * @param maxIterations The maximum number of iterations to perform
    * @param convergenceTol The maximum change in error at which convergence occurs.
-   * @return two matrixes W and H in RowMatrix and DenseMatrix format respectively 
+   * @return two matrixes W and H in RowMatrix and DenseMatrix format respectively
    */
   def run(V: RowMatrix, k: Int, maxIterations: Int, convergenceTol: Double = 1e-4): (RowMatrix, BDM[Double]) = {
 
     /**
      * TODO 1: Implement your code here
-     * Initialize W, H randomly 
+     * Initialize W, H randomly
      * Calculate the initial error (Euclidean distance between V and W * H)
      */
 
@@ -37,8 +37,8 @@ object NMF {
 
     /**
      * TODO 2: Implement your code here
-     * Iteratively update W, H in a parallel fashion until error falls below the tolerance value 
-     * The updating equations are, 
+     * Iteratively update W, H in a parallel fashion until error falls below the tolerance value
+     * The updating equations are,
      * H = H.* W^T^V ./ (W^T^W H)
      * W = W.* VH^T^ ./ (W H H^T^)
      */
@@ -51,10 +51,10 @@ object NMF {
   }
 
 
-  /**  
+  /**
   * RECOMMENDED: Implement the helper functions if you needed
   * Below are recommended helper functions for matrix manipulation
-  * For the implementation of the first three helper functions (with a null return), 
+  * For the implementation of the first three helper functions (with a null return),
   * you can refer to dotProd and dotDiv whose implementation are provided
   */
   /**
@@ -63,12 +63,12 @@ object NMF {
   */
 
   /** compute the mutiplication of a RowMatrix and a dense matrix */
-  private def multiply(X: RowMatrix, d: BDM[Double]): RowMatrix = {
+  def multiply(X: RowMatrix, d: BDM[Double]): RowMatrix = {
     null
   }
 
  /** get the dense matrix representation for a RowMatrix */
-  private def getDenseMatrix(X: RowMatrix): BDM[Double] = {
+  def getDenseMatrix(X: RowMatrix): BDM[Double] = {
     null
   }
 

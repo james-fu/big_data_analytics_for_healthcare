@@ -16,6 +16,7 @@ import org.apache.spark.mllib.clustering.{GaussianMixture, KMeans}
 import org.apache.spark.mllib.linalg.{DenseMatrix, Matrices, Vectors, Vector}
 import org.apache.spark.mllib.feature.StandardScaler
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.{SparkConf, SparkContext}
 
@@ -67,7 +68,7 @@ object Main {
     println(f"[Filtered feature] purity of kMeans is: $kMeansPurity2%.5f")
     println(f"[Filtered feature] purity of GMM is: $gaussianMixturePurity2%.5f")
     println(f"[Filtered feature] purity of NMF is: $nmfPurity2%.5f")
-    sc.stop 
+    sc.stop
   }
 
   def testClustering(phenotypeLabel: RDD[(String, Int)], rawFeatures:RDD[(String, Vector)]): (Double, Double, Double) = {
@@ -118,9 +119,9 @@ object Main {
     val assignments = w.rows.map(_.toArray.zipWithIndex.maxBy(_._1)._2)
     // zip patientIDs with their corresponding cluster assignments
     // Note that map doesn't change the order of rows
-    val assignmentsWithPatientIds=features.map({case (patientId,f)=>patientId}).zip(assignments) 
+    val assignmentsWithPatientIds=features.map({case (patientId,f)=>patientId}).zip(assignments)
     // join your cluster assignments and phenotypeLabel on the patientID and obtain a RDD[(Int,Int)]
-    // which is a RDD of (clusterNumber, phenotypeLabel) pairs 
+    // which is a RDD of (clusterNumber, phenotypeLabel) pairs
     val nmfClusterAssignmentAndLabel = assignmentsWithPatientIds.join(phenotypeLabel).map({case (patientID,value)=>value})
     // Obtain purity value
     val nmfPurity = Metrics.purity(nmfClusterAssignmentAndLabel)
@@ -146,18 +147,44 @@ object Main {
     val dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX")
 
     /** load data using Spark SQL into three RDDs and return them
-      * Hint: You can utilize edu.gatech.cse8803.ioutils.CSVUtils and SQLContext.
-      *
-      * Notes:Refer to model/models.scala for the shape of Medication, LabResult, Diagnostic data type.
-      *       Be careful when you deal with String and numbers in String type.
-      *       Ignore lab results with missing (empty or NaN) values when these are read in.
-      *       For dates, use Date_Resulted for labResults and Order_Date for medication.
-      * */
+     * Hint: You can utilize edu.gatech.cse8803.ioutils.CSVUtils and SQLContext.
+     *
+     * Notes:Refer to model/models.scala for the shape of Medication, LabResult, Diagnostic data type.
+     *       Be careful when you deal with String and numbers in String type.
+     *       Ignore lab results with missing (empty or NaN) values when these are read in.
+     *       For dates, use Date_Resulted for labResults and Order_Date for medication.
+     * */
 
-    /** TODO: implement your own code here and remove existing placeholder code below */
-    val medication: RDD[Medication] =  sqlContext.sparkContext.emptyRDD
-    val labResult: RDD[LabResult] =  sqlContext.sparkContext.emptyRDD
-    val diagnostic: RDD[Diagnostic] =  sqlContext.sparkContext.emptyRDD
+    var med_df = CSVUtils.loadCSVAsTable(sqlContext,
+      "data/hdfs_input/medication_orders_INPUT.csv", "Medication")
+
+    med_df = med_df.select("Member_ID", "Order_Date", "Drug_Name")
+    val medication: RDD[Medication] = med_df.map( x => Medication(x.getString(0),
+      dateFormat.parse(x.getString(1)),
+      x.getString(2)))
+
+
+    var lab_df = CSVUtils.loadCSVAsTable(sqlContext,
+      "data/hdfs_input/lab_results_INPUT.csv", "LabResult")
+    lab_df = lab_df.select("Member_ID", "Date_Resulted", "Test_Name", "Numeric_Result")
+    lab_df = lab_df.na.drop()
+    val labResult: RDD[LabResult] = med_df.map( x => LabResult(x.getString(0),
+      dateFormat.parse(x.getString(1)),
+      x.getString(2),
+      x.getDouble(3)))
+
+
+    var diag_df = CSVUtils.loadCSVAsTable(sqlContext,
+    "data/hdfs_input/encounter_dx_INPUT.csv", "Diagnostic")
+    var event_df = CSVUtils.loadCSVAsTable(sqlContext,
+    "data/hdfs_input/encounter_INPUT.csv", "Diagnostic")
+    var full_df = event_df.join(diag_df)
+
+    diag_df = full_df.select("Member_ID", "Encounter_DateTime", "code")
+    val diagnostic: RDD[Diagnostic] = med_df.map( x => Diagnostic(x.getString(0),
+      dateFormat.parse(x.getString(1)),
+      x.getString(2)))
+
 
     (medication, labResult, diagnostic)
   }
