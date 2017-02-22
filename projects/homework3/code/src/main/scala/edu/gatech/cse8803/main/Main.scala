@@ -31,7 +31,11 @@ object Main {
     Logger.getLogger("org").setLevel(Level.WARN)
     Logger.getLogger("akka").setLevel(Level.WARN)
 
+    //val sConf = new SparkConf()
+    //val sc = new SparkContext(sConf)//createContext
+
     val sc = createContext
+    sc.getConf.getAll.foreach(println)
     val sqlContext = new SQLContext(sc)
 
     /** initialize loading of data */
@@ -156,45 +160,60 @@ object Main {
      * */
 
     var med_df = CSVUtils.loadCSVAsTable(sqlContext,
-      "data/hdfs_input/medication_orders_INPUT.csv", "Medication")
+      "data/medication_orders_INPUT.csv", "Medication")
 
     med_df = med_df.select("Member_ID", "Order_Date", "Drug_Name")
     val medication: RDD[Medication] = med_df.map( x => Medication(x.getString(0),
       dateFormat.parse(x.getString(1)),
-      x.getString(2)))
+      x.getString(2))).sample(true, .01).repartition(5)
 
 
     var lab_df = CSVUtils.loadCSVAsTable(sqlContext,
-      "data/hdfs_input/lab_results_INPUT.csv", "LabResult")
+      "data/lab_results_INPUT.csv", "LabResult")
     lab_df = lab_df.select("Member_ID", "Date_Resulted", "Test_Name", "Numeric_Result")
     lab_df = lab_df.na.drop()
-    val labResult: RDD[LabResult] = med_df.map( x => LabResult(x.getString(0),
+    val labResult: RDD[LabResult] = lab_df.map( x => LabResult(x.getString(0),
       dateFormat.parse(x.getString(1)),
       x.getString(2),
       x.getDouble(3)))
 
 
     var diag_df = CSVUtils.loadCSVAsTable(sqlContext,
-    "data/hdfs_input/encounter_dx_INPUT.csv", "Diagnostic")
+    "data/encounter_dx_INPUT.csv", "Diagnostic").sample(true, .01).cache()
     var event_df = CSVUtils.loadCSVAsTable(sqlContext,
-    "data/hdfs_input/encounter_INPUT.csv", "Diagnostic")
+    "data/encounter_INPUT.csv", "Diagnostic").sample(true, .01).cache()
     var full_df = event_df.join(diag_df)
+    diag_df.unpersist()
+    event_df.unpersist()
 
     diag_df = full_df.select("Member_ID", "Encounter_DateTime", "code")
-    val diagnostic: RDD[Diagnostic] = med_df.map( x => Diagnostic(x.getString(0),
+
+    full_df.unpersist()
+    val diagnostic: RDD[Diagnostic] = diag_df.map( x => Diagnostic(x.getString(0),
       dateFormat.parse(x.getString(1)),
-      x.getString(2)))
+      x.getString(2))).repartition(5)
 
 
     (medication, labResult, diagnostic)
   }
 
   def createContext(appName: String, masterUrl: String): SparkContext = {
-    val conf = new SparkConf().setAppName(appName).setMaster(masterUrl)
+    val conf = new SparkConf()
+      .setAppName(appName)
+      .setMaster(masterUrl)
+      //.set("spark.driver.memory", "24g")
+      //.set("spark.executor.memory", "6g")
+      //.set("spark.driver.maxResultSize", "2g")
+      //.set("spark.memory.storageFraction", "0.75")
+      //.set("spark.default.parallelism", "30")
+      .set("spark.local.dir", "/home/jeff/tmp")
+      .set("spark.shuffle.file.buffer", "100m")
+      .set("spark.cores.max", "32")
+
     new SparkContext(conf)
   }
 
-  def createContext(appName: String): SparkContext = createContext(appName, "local")
+  def createContext(appName: String): SparkContext = createContext(appName, "local[*]")
 
-  def createContext: SparkContext = createContext("CSE 8803 Homework Two Application", "local")
+  def createContext: SparkContext = createContext("CSE 8803 Homework Two Application", "local[*]")
 }

@@ -12,7 +12,7 @@ object CSVUtils {
   def loadCSVAsTable(sqlContext: SQLContext, path: String, tableName: String): SchemaRDD = {
     val data = sqlContext.csvFile(path)
     data.registerTempTable(tableName)
-    data
+    data.repartition(5)
   }
 
   def loadCSVAsTable(sqlContext: SQLContext, path: String): SchemaRDD = {

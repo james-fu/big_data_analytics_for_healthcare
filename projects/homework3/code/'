@@ -6,7 +6,7 @@
 package edu.gatech.cse8803.phenotyping
 
 import edu.gatech.cse8803.model.{Diagnostic, LabResult, Medication}
-import org.apache.spark.rdd.{PairRDDFunctions, RDD}
+import org.apache.spark.rdd.RDD
 
 object T2dmPhenotype {
 
@@ -44,6 +44,7 @@ object T2dmPhenotype {
       * Hint: Consider case sensitivity when doing string comparisons.
       */
 
+    isCase(medication, labResult, diagnostic)
     val sc = medication.sparkContext
 
     /** Hard code the criteria */
@@ -51,8 +52,7 @@ object T2dmPhenotype {
     val type1_dm_med = Set("med1", "insulin nph")
 
     /** Find CASE Patients */
-    val casePatients = isCase(medication, diagnostic)
-    //val casePatients = sc.parallelize(Seq(("casePatient-one", 1), ("casePatient-two", 1), ("casePatient-three", 1)))
+    val casePatients = sc.parallelize(Seq(("casePatient-one", 1), ("casePatient-two", 1), ("casePatient-three", 1)))
 
     /** Find CONTROL Patients */
     val controlPatients = sc.parallelize(Seq(("controlPatients-one", 2), ("controlPatients-two", 2), ("controlPatients-three", 2)))
@@ -67,43 +67,32 @@ object T2dmPhenotype {
     phenotypeLabel
   }
 
-  def isCase(medication: RDD[Medication], diagnostic: RDD[Diagnostic]): RDD[(String, Int)]= {
+  def isCase(medication: RDD[Medication], labResult: RDD[LabResult], diagnostic: RDD[Diagnostic]): RDD[(String, Int)] = {
+
+    //val part_diag = diagnostic.repartition(50)
+    val step0 = diagnostic.toDF
     val step1 = diagnostic
       .filter(y => !T1DM_DX.contains(y.code))
-      .filter(y => T2DM_DX.contains(y.code))
-      .map( x => (x.patientID, 1))
-      .cache()
+      //.distinct(50)
+      //.map(x => (x.patientID, true))
+      //.filter( x => x._2)
 
-    val split1 = medication
-      .filter(y => !T1DM_MED.contains(y.medicine))
-      .map( x => (x.patientID, 1))
+    println("HERE!!!!")
+    println(diagnostic.partitions.size)
+    println(step1.first())
 
-    val split2 = medication
-      .filter(y => T1DM_MED.contains(y.medicine))
-      .cache()
+    val sc = medication.sparkContext
+    val casePatients = sc.parallelize(Seq(("casePatient-one", 1), ("casePatient-two", 1), ("casePatient-three", 1)))
 
-    val split3 = split2
-      .filter(y => !T2DM_MED.contains(y.medicine))
-      .map( x => (x.patientID, 1))
+    /** Find CONTROL Patients */
+    val controlPatients = sc.parallelize(Seq(("controlPatients-one", 2), ("controlPatients-two", 2), ("controlPatients-three", 2)))
 
-    //val split4 = split2
-      //.filter(y => T2DM_MED.contains(y.medicine))
-      //.groupBy( x => x.patientID)
-      //.filter(
-      //.map( x => (x.patientID, 1))
+    /** Find OTHER Patients */
+    val others = sc.parallelize(Seq(("others-one", 3), ("others-two", 3), ("others-three", 3)))
 
-    val final1 = split1.intersection(step1)
-    val final2 = split3.intersection(step1)
-    val output = final1.union(final2)
+    /** Once you find patients for each group, make them as a single RDD[(String, Int)] */
+    val phenotypeLabel = sc.union(casePatients, controlPatients, others)
 
-    //println(output.first())
-
-    output
-  }
-
-  //def isControl(labResult: RDD[LabResult], diagnostic: RDD[Diagnostic]): RDD[(String, Int)] = {
-
-  def isControl(labResult: RDD[LabResult], diagnostic: RDD[Diagnostic]): Unit = {
-
+    phenotypeLabel
   }
 }
