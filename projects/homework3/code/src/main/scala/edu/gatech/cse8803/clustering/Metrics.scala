@@ -21,9 +21,6 @@ object Metrics {
    * @return purity
    */
   def purity(clusterAssignmentAndLabel: RDD[(Int, Int)]): Double = {
-    /**
-     * TODO: Remove the placeholder and implement your code here
-     */
 
     val numSamples = clusterAssignmentAndLabel.count().toDouble
 
@@ -31,8 +28,9 @@ object Metrics {
       val output = group._2
         .groupBy( x => x._2 ) //group by class
         .map( x => x._2.map( z => 1.0 ).reduce(_+_) )
+        .reduce( (x, y) => x max y)
 
-      output.reduce( (x, y) => x max y)
+      output
     }
 
     val summation = clusterAssignmentAndLabel
@@ -41,8 +39,6 @@ object Metrics {
       .map( singleCluster )
       .reduce( _+_ )
 
-      println("OUTPUT!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-      println(summation)
    return summation / numSamples
   }
 }

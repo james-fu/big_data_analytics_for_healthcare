@@ -10,7 +10,8 @@ import breeze.linalg._
 import breeze.numerics._
 import org.apache.spark.mllib.linalg.{Vectors, Vector}
 import org.apache.spark.mllib.linalg.distributed.RowMatrix
-
+//import org.apache.spark.mllib.util.fastSquaredDistance
+import org.apache.spark.SparkContext
 
 object NMF {
 
@@ -23,17 +24,18 @@ object NMF {
    * @return two matrixes W and H in RowMatrix and DenseMatrix format respectively
    */
   def run(V: RowMatrix, k: Int, maxIterations: Int, convergenceTol: Double = 1e-4): (RowMatrix, BDM[Double]) = {
-
+    val sc = V.rows.sparkContext
     /**
      * TODO 1: Implement your code here
      * Initialize W, H randomly
      * Calculate the initial error (Euclidean distance between V and W * H)
      */
+    var W = getRowMatrix(BDM.rand[Double](V.numRows().toInt, k), V.numCols().toInt, sc)
+    var H = BDM.rand[Double](k, V.numCols().toInt)
+    var errorDiff = getError(V, W, H)
+    var error = getError(V, W, H)
 
-
-
-
-
+    var iterCount = 0
 
     /**
      * TODO 2: Implement your code here
@@ -42,12 +44,46 @@ object NMF {
      * H = H.* W^T^V ./ (W^T^W H)
      * W = W.* VH^T^ ./ (W H H^T^)
      */
+    //var Hs = Matrix
+    //var newH = BDM
+    //var Ws = Matrix
+    //var newW = RowMatrix
 
+    while ( iterCount < maxIterations && errorDiff > convergenceTol){
+
+      val Hs = H*H.t
+
+      val newW = dotDiv(dotProd(W, V.multiply(fromBreeze(H.t))), W.multiply(fromBreeze(Hs)))
+
+      val Ws = toBreezeMatrix(W.computeGramianMatrix())
+
+      val newH = H :* (computeWTV(W, V) :/ (Ws * H).toDenseMatrix)
+
+
+      val newError = getError(V, newW, newH)
+
+      errorDiff = abs(newError - error)
+
+      error = newError
+      H = newH
+      W = newW
+
+      W.rows.cache()
+      V.rows.cache()
+
+      println("ERROR!!!!!!!!!!!!!!!!!!!")
+      println(errorDiff)
+      //println(error)
+      println(iterCount)
+
+      iterCount = iterCount + 1
+    }
 
 
 
     /** TODO: Remove the placeholder for return and replace with correct values */
-    (new RowMatrix(V.rows.map(_ => BDV.rand[Double](k)).map(fromBreeze).cache), BDM.rand[Double](k, V.numCols().toInt))
+    (W, H)
+    //(new RowMatrix(V.rows.map(_ => BDV.rand[Double](k)).map(fromBreeze).cache), BDM.rand[Double](k, V.numCols().toInt))
   }
 
 
@@ -64,17 +100,58 @@ object NMF {
 
   /** compute the mutiplication of a RowMatrix and a dense matrix */
   def multiply(X: RowMatrix, d: BDM[Double]): RowMatrix = {
-    null
+    val byRow = X.multiply(fromBreeze(d))
+
+    byRow
+  }
+
+  def transpose(X: RowMatrix): RowMatrix = {
+    getRowMatrix(getDenseMatrix(X).t, X.numRows().toInt, X.rows.sparkContext)
+  }
+
+
+  def getError(V: RowMatrix, W: RowMatrix, H: BDM[Double]): Double = {
+    val WH = multiply(W, H)
+    val diff = getDenseMatrix(V)-getDenseMatrix(WH)
+    var error = sqrt(sum(diff :* diff))
+
+    error
+  }
+
+  def getRowMatrix(X: BDM[Double], numRows: Int, sc: SparkContext): RowMatrix = {
+      val output = X
+        .t
+        .toDenseVector
+        .toArray
+        .grouped(numRows)
+        .toList
+        .map( Vectors.dense )
+
+      val byRow = sc.parallelize(output)
+
+      new RowMatrix(byRow)
   }
 
  /** get the dense matrix representation for a RowMatrix */
   def getDenseMatrix(X: RowMatrix): BDM[Double] = {
-    null
+    val data = X.rows.map( _.toArray ).collect().flatten
+    val rows = X.numRows()
+    val cols = X.numCols()
+    //println("Rows:")
+    //println(rows)
+    //println("Cols:")
+    //println(cols)
+
+    val denseMat = new BDM(cols.toInt, rows.toInt, data).t
+    denseMat
   }
 
   /** matrix multiplication of W.t and V */
   def computeWTV(W: RowMatrix, V: RowMatrix): BDM[Double] = {
-    null
+    val denseW = getDenseMatrix(W)
+    val denseV = getDenseMatrix(V)
+
+    denseW.t * denseV
   }
 
   /** dot product of two RowMatrixes */

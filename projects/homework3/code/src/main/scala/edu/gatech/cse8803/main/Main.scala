@@ -86,7 +86,7 @@ object Main {
 
     /** reduce dimension */
     val mat: RowMatrix = new RowMatrix(rawFeatureVectors)
-    val pc: Matrix = mat.computePrincipalComponents(2) // Principal components are stored in a local dense matrix.
+    val pc: Matrix = mat.computePrincipalComponents(10) // Principal components are stored in a local dense matrix.
     val featureVectors = mat.multiply(pc).rows
 
     val densePc = Matrices.dense(pc.numRows, pc.numCols, pc.toArray).asInstanceOf[DenseMatrix]
@@ -119,12 +119,6 @@ object Main {
     val k_model = kmeans.run(featureVectors)
     val k_clusters = k_model.predict(featureVectors)
 
-    println("KMeans")
-    println(featureVectors.first())
-    println(k_clusters.first())
-
-
-    //val kMeansPurity = 0.0
 
     // use zip before passing to purity
     val kMeansPurity = Metrics.purity(labels.zip(k_clusters.repartition(5)))
