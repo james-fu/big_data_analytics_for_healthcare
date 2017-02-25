@@ -19,6 +19,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.storage.StorageLevel
 
 import scala.io.Source
 
@@ -31,9 +32,6 @@ object Main {
     Logger.getLogger("org").setLevel(Level.WARN)
     Logger.getLogger("akka").setLevel(Level.WARN)
 
-    //val sConf = new SparkConf()
-    //val sc = new SparkContext(sConf)//createContext
-
     val sc = createContext
     sc.getConf.getAll.foreach(println)
     val sqlContext = new SQLContext(sc)
@@ -43,9 +41,11 @@ object Main {
     val (candidateMedication, candidateLab, candidateDiagnostic) = loadLocalRawData
 
     /** conduct phenotyping */
+    println("Phenotyping...")
     val phenotypeLabel = T2dmPhenotype.transform(medication, labResult, diagnostic)
 
     /** feature construction with all features */
+    println("Feature Construction...")
     val featureTuples = sc.union(
       FeatureConstruction.constructDiagnosticFeatureTuple(diagnostic),
       FeatureConstruction.constructLabFeatureTuple(labResult),
@@ -86,7 +86,7 @@ object Main {
 
     /** reduce dimension */
     val mat: RowMatrix = new RowMatrix(rawFeatureVectors)
-    val pc: Matrix = mat.computePrincipalComponents(10) // Principal components are stored in a local dense matrix.
+    val pc: Matrix = mat.computePrincipalComponents(2) // Principal components are stored in a local dense matrix.
     val featureVectors = mat.multiply(pc).rows
 
     val densePc = Matrices.dense(pc.numRows, pc.numCols, pc.toArray).asInstanceOf[DenseMatrix]
@@ -103,7 +103,32 @@ object Main {
       *  Find Purity using that RDD as an input to Metrics.purity
       *  Remove the placeholder below after your implementation
       **/
-    val kMeansPurity = 0.0
+
+    val labels = phenotypeLabel
+      .map( _._2)
+      .repartition(5)
+      .cache()
+    //val km_model = KMeans.train(featureVectors, 3, 20)
+    //val k_clusters = km_model.predict(featureVectors)
+
+    val kmeans = new KMeans()
+      .setK(3)
+      .setMaxIterations(20)
+      .setSeed(8803L)
+
+    val k_model = kmeans.run(featureVectors)
+    val k_clusters = k_model.predict(featureVectors)
+
+    println("KMeans")
+    println(featureVectors.first())
+    println(k_clusters.first())
+
+
+    //val kMeansPurity = 0.0
+
+    // use zip before passing to purity
+    val kMeansPurity = Metrics.purity(labels.zip(k_clusters.repartition(5)))
+
 
     /** TODO: GMMM Clustering using spark mllib
       *  Train a Gaussian Mixture model using the variabe featureVectors as input
@@ -113,8 +138,16 @@ object Main {
       *  Find Purity using that RDD as an input to Metrics.purity
       *  Remove the placeholder below after your implementation
       **/
-    val gaussianMixturePurity = 0.0
 
+    val gmm = new GaussianMixture()
+      .setK(3)
+      .setMaxIterations(20)
+      .setSeed(8803L)
+
+    val gmm_model = gmm.run(featureVectors)
+    val g_clusters = gmm_model.predict(featureVectors)
+
+    val gaussianMixturePurity = Metrics.purity(labels.zip(g_clusters.repartition(5)))
 
     /** NMF */
     val rawFeaturesNonnegative = rawFeatures.map({ case (patientID, f)=> Vectors.dense(f.toArray.map(v=>Math.abs(v)))})
@@ -159,40 +192,52 @@ object Main {
      *       For dates, use Date_Resulted for labResults and Order_Date for medication.
      * */
 
-    var med_df = CSVUtils.loadCSVAsTable(sqlContext,
+    val med_df = CSVUtils.loadCSVAsTable(sqlContext,
       "data/medication_orders_INPUT.csv", "Medication")
 
-    med_df = med_df.select("Member_ID", "Order_Date", "Drug_Name")
-    val medication: RDD[Medication] = med_df.map( x => Medication(x.getString(0),
+    val med_selection = med_df.select("Member_ID", "Order_Date", "Drug_Name")
+    val medication: RDD[Medication] = med_selection.map( x => Medication(x.getString(0),
       dateFormat.parse(x.getString(1)),
-      x.getString(2))).sample(true, .01).repartition(5)
+      x.getString(2))).sample(true, .01)
+
+    med_df.unpersist()
+    med_selection.unpersist()
 
 
-    var lab_df = CSVUtils.loadCSVAsTable(sqlContext,
+    val lab_df = CSVUtils.loadCSVAsTable(sqlContext,
       "data/lab_results_INPUT.csv", "LabResult")
-    lab_df = lab_df.select("Member_ID", "Date_Resulted", "Test_Name", "Numeric_Result")
-    lab_df = lab_df.na.drop()
-    val labResult: RDD[LabResult] = lab_df.map( x => LabResult(x.getString(0),
+    val lab_1 = lab_df.select("Member_ID", "Date_Resulted", "Result_Name", "Numeric_Result")
+    val lab_2 = lab_1.withColumn("numTmp", lab_1("Numeric_Result").cast("double"))
+      .drop("Numeric_Result")
+      .withColumnRenamed("numTmp", "Numeric_Result")
+
+    val lab_3 = lab_2.na.drop()
+    val labResult: RDD[LabResult] = lab_3.map( x => LabResult(x.getString(0),
       dateFormat.parse(x.getString(1)),
       x.getString(2),
-      x.getDouble(3)))
+      x.getDouble(3))).sample(true, .01)
+
+    lab_df.unpersist()
+    lab_1.unpersist()
+    lab_2.unpersist()
+    lab_3.unpersist()
 
 
-    var diag_df = CSVUtils.loadCSVAsTable(sqlContext,
-    "data/encounter_dx_INPUT.csv", "Diagnostic").sample(true, .01).cache()
-    var event_df = CSVUtils.loadCSVAsTable(sqlContext,
-    "data/encounter_INPUT.csv", "Diagnostic").sample(true, .01).cache()
-    var full_df = event_df.join(diag_df)
+    val diag_df = CSVUtils.loadCSVAsTable(sqlContext,
+    "data/encounter_dx_INPUT.csv", "Diagnostic").sample(true, .01)
+    val event_df = CSVUtils.loadCSVAsTable(sqlContext,
+    "data/encounter_INPUT.csv", "Diagnostic").sample(true, .01)
+    val full_df = event_df.join(diag_df)
+    val full_selection = full_df.select("Member_ID", "Encounter_DateTime", "code")
+
+    val diagnostic: RDD[Diagnostic] = full_selection.map( x => Diagnostic(x.getString(0),
+      dateFormat.parse(x.getString(1)),
+      x.getString(2)))
+
     diag_df.unpersist()
     event_df.unpersist()
-
-    diag_df = full_df.select("Member_ID", "Encounter_DateTime", "code")
-
     full_df.unpersist()
-    val diagnostic: RDD[Diagnostic] = diag_df.map( x => Diagnostic(x.getString(0),
-      dateFormat.parse(x.getString(1)),
-      x.getString(2))).repartition(5)
-
+    full_selection.unpersist()
 
     (medication, labResult, diagnostic)
   }
@@ -201,19 +246,19 @@ object Main {
     val conf = new SparkConf()
       .setAppName(appName)
       .setMaster(masterUrl)
-      //.set("spark.driver.memory", "24g")
+      .set("spark.driver.memory", "28g")
       //.set("spark.executor.memory", "6g")
       //.set("spark.driver.maxResultSize", "2g")
-      //.set("spark.memory.storageFraction", "0.75")
-      //.set("spark.default.parallelism", "30")
+      .set("spark.memory.storageFraction", "0.75")
+      .set("spark.default.parallelism", "30")
       .set("spark.local.dir", "/home/jeff/tmp")
-      .set("spark.shuffle.file.buffer", "100m")
+      .set("spark.shuffle.file.buffer", "20m")
       .set("spark.cores.max", "32")
 
     new SparkContext(conf)
   }
 
-  def createContext(appName: String): SparkContext = createContext(appName, "local[*]")
+  def createContext(appName: String): SparkContext = createContext(appName, "local[16]")
 
-  def createContext: SparkContext = createContext("CSE 8803 Homework Two Application", "local[*]")
+  def createContext: SparkContext = createContext("CSE 8803 Homework Two Application", "local[16]")
 }

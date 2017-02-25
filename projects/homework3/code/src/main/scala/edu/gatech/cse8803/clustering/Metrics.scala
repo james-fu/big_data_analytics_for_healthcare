@@ -24,6 +24,25 @@ object Metrics {
     /**
      * TODO: Remove the placeholder and implement your code here
      */
-    0.0
+
+    val numSamples = clusterAssignmentAndLabel.count().toDouble
+
+    def singleCluster(group:(Int, Iterable[(Int, Int)])): Double = {
+      val output = group._2
+        .groupBy( x => x._2 ) //group by class
+        .map( x => x._2.map( z => 1.0 ).reduce(_+_) )
+
+      output.reduce( (x, y) => x max y)
+    }
+
+    val summation = clusterAssignmentAndLabel
+      .map( x => (x._1, (x._1, x._2)))
+      .groupByKey()
+      .map( singleCluster )
+      .reduce( _+_ )
+
+      println("OUTPUT!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+      println(summation)
+   return summation / numSamples
   }
 }

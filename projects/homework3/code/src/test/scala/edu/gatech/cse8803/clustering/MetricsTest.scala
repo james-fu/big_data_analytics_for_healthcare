@@ -11,7 +11,7 @@ class MetricsTest extends FlatSpec with BeforeAndAfter with Matchers {
   var sparkContext: SparkContext = _
 
   before {
-    val config = new SparkConf().setAppName("Test Metrics").setMaster("local")
+    val config = new SparkConf().setAppName("Test Metrics").setMaster("local[8]")
     sparkContext = new SparkContext(config)
   }
 
