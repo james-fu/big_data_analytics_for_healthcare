@@ -103,64 +103,134 @@ object T2dmPhenotype {
   }
 
   def isCase(medication: RDD[Medication], diagnostic: RDD[Diagnostic]): RDD[(String, Int)]= {
+
+    //val sc = medication.sparkContext
+
     val step1 = diagnostic
       .filter(y => !T1DM_DX.contains(y.code))
+      .map( x => x.patientID)
+
+    val step2 = diagnostic
       .filter(y => T2DM_DX.contains(y.code))
-      .map( x => (x.patientID, 1))
-      .cache()
+      .map( x => x.patientID)
 
-    val split1 = medication
-      .filter(y => !T1DM_MED.contains(y.medicine.toLowerCase()))
-      .map( x => (x.patientID, 1))
+    // All patients that were not T1, but wer T2
+    val filteredDiag = step1.intersection(step2).collect.toSet
 
-    val split2 = medication
-      .filter(y => T1DM_MED.contains(y.medicine.toLowerCase()))
-
-    val split3 = split2
-      .filter(y => !T2DM_MED.contains(y.medicine.toLowerCase()))
-      .map( x => (x.patientID, 1))
-
-    def firstOccurrence(rdd: (String, Iterable[Medication])): Medication = {
-      val by_date = rdd._2.map( x => (x.date, x)).toSeq
+    def firstOccurrence(rdd: Iterable[Medication]): Medication = {
+      val by_date = rdd.map( x => (x.date, x)).toSeq
 
       val sorted = scala.util.Sorting.stableSort(by_date,
         (x:(Date, Medication), y:(Date, Medication)) => x._1.before(y._1))
       sorted.head._2
     }
 
-    val first_t1 = medication
-      .filter( y => T1DM_MED.contains(y.medicine.toLowerCase()))
-      .map( y => (y.patientID, y))
-      .groupByKey()
-      .map( firstOccurrence )
-      .map( y => (y.patientID, y))
+    def rightMeds(rdd: (String, Iterable[Medication])): (String, Int) = {
 
-    val first_t2 = medication
-      .filter( y => T2DM_MED.contains(y.medicine.toLowerCase()))
-      .map( y => (y.patientID, y))
-      .groupByKey()
-      .map( firstOccurrence )
-      .map( y => (y.patientID, y))
+      var noMedT1 = false
+      var noMedT2 = false
+      var precedes = false
 
-    val joined_t = first_t1.join(first_t2)
-      .filter( y => y._2._1.date.before(y._2._2.date))
-      .map( y => (y._1, 1))
+      val patientID = rdd._1
+
+      val medList = rdd._2
+
+      val medT1 = medList
+        .filter(y => T1DM_MED.contains(y.medicine.toLowerCase()))
+
+      noMedT1 = medT1.size == 0
+
+      if ( !noMedT1 ) {
+        val medT2 = medList
+          .filter(y => T2DM_MED.contains(y.medicine.toLowerCase()))
+
+        noMedT2 = medT2.size == 0
+
+        if ( !noMedT2 ){
+
+          val first_t1 = firstOccurrence(medT1)
+          val first_t2 = firstOccurrence(medT2)
+
+          precedes = first_t2.date.before(first_t1.date)
+        }
+      }
+
+      var output = (patientID, 0)
+      if ( noMedT1 || noMedT2 || precedes) {
+        output = (patientID, 1)
+      }
+      output
+    }
+
+    val medByID = medication
+      .filter( x => filteredDiag.contains(x.patientID))
+      .map( x => (x.patientID, x))
+      .groupByKey()
+      .map( rightMeds )
+      .filter( x => x._2 == 1 )
+
+    //val step1 = diagnostic
+      //.filter(y => !T1DM_DX.contains(y.code))
+      //.filter(y => T2DM_DX.contains(y.code))
+      //.map( x => (x.patientID, 1))
+      //.cache()
+
+    //val split1 = medication
+      //.filter(y => !T1DM_MED.contains(y.medicine.toLowerCase()))
+      //.map( x => (x.patientID, 1))
+
+    //val split2 = medication
+      //.filter(y => T1DM_MED.contains(y.medicine.toLowerCase()))
+
+    //val split3 = split2
+      //.filter(y => !T2DM_MED.contains(y.medicine.toLowerCase()))
+      //.map( x => (x.patientID, 1))
+
+    //def firstOccurrence(rdd: (String, Iterable[Medication])): Medication = {
+      //val by_date = rdd._2.map( x => (x.date, x)).toSeq
+
+      //val sorted = scala.util.Sorting.stableSort(by_date,
+        //(x:(Date, Medication), y:(Date, Medication)) => x._1.before(y._1))
+      //sorted.head._2
+    //}
+
+    //val first_t1 = medication
+      //.filter( y => T1DM_MED.contains(y.medicine.toLowerCase()))
+      //.map( y => (y.patientID, y))
+      //.groupByKey()
+      //.map( firstOccurrence )
+      //.map( y => (y.patientID, y))
+      //.cache()
+
+    //val first_t2 = medication
+      //.filter( y => T2DM_MED.contains(y.medicine.toLowerCase()))
+      //.map( y => (y.patientID, y))
+      //.groupByKey()
+      //.map( firstOccurrence )
+      //.map( y => (y.patientID, y))
+      //.cache()
+
+    //val joined_t = first_t1.join(first_t2)
+      //.filter( y => y._2._1.date.before(y._2._2.date))
+      //.map( y => (y._1, 1))
+      //.cache()
 
 
     //TODO: Last step
-    val final1 = split1.intersection(step1, 16)
-    val final2 = split3.intersection(step1, 16)
-    val final3 = joined_t.intersection(step1, 16)
-    val output = final1.union(final2).union(final3).distinct(16)
+    //val final1 = split1.intersection(step1).cache()
+    //val final2 = split3.intersection(step1).cache()
+    //val final3 = joined_t.intersection(step1).cache()
+    //val output = final1.union(final2).union(final3).distinct(16)
 
-    step1.unpersist()
-    split1.unpersist()
-    first_t1.unpersist()
-    first_t2.unpersist()
+    //step1.unpersist()
+    //split1.unpersist()
+    //first_t1.unpersist()
+    //first_t2.unpersist()
 
 
     //println(output.first())
-    output
+    //
+    medByID
   }
 
   def isControl(labResult: RDD[LabResult], diagnostic: RDD[Diagnostic]): RDD[(String, Int)] = {

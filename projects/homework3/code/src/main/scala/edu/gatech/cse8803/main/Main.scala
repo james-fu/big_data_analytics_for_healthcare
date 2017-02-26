@@ -192,8 +192,10 @@ object Main {
     val med_selection = med_df.select("Member_ID", "Order_Date", "Drug_Name")
     val medication: RDD[Medication] = med_selection.map( x => Medication(x.getString(0),
       dateFormat.parse(x.getString(1)),
-      x.getString(2))).sample(true, .01)
+      x.getString(2))).cache()//.sample(true, .01)
 
+    println("MED!!!!")
+    println(medication.count())
     med_df.unpersist()
     med_selection.unpersist()
 
@@ -209,8 +211,10 @@ object Main {
     val labResult: RDD[LabResult] = lab_3.map( x => LabResult(x.getString(0),
       dateFormat.parse(x.getString(1)),
       x.getString(2),
-      x.getDouble(3))).sample(true, .01)
+      x.getDouble(3))).cache()//.sample(true, .01)
 
+    println("LAB!!!!")
+    println(labResult.count())
     lab_df.unpersist()
     lab_1.unpersist()
     lab_2.unpersist()
@@ -218,15 +222,19 @@ object Main {
 
 
     val diag_df = CSVUtils.loadCSVAsTable(sqlContext,
-    "data/encounter_dx_INPUT.csv", "Diagnostic").sample(true, .01)
+    "data/encounter_dx_INPUT.csv", "Diagnostic")//.sample(true, .01)
     val event_df = CSVUtils.loadCSVAsTable(sqlContext,
-    "data/encounter_INPUT.csv", "Diagnostic").sample(true, .01)
-    val full_df = event_df.join(diag_df)
+    "data/encounter_INPUT.csv", "Diagnostic")//.sample(true, .01)
+    val full_df = event_df.join(diag_df, event_df.col("Encounter_ID").equalTo(diag_df("Encounter_ID")))
     val full_selection = full_df.select("Member_ID", "Encounter_DateTime", "code")
 
     val diagnostic: RDD[Diagnostic] = full_selection.map( x => Diagnostic(x.getString(0),
       dateFormat.parse(x.getString(1)),
-      x.getString(2)))
+      x.getString(2))).cache()
+
+    println("DIAG!!!!")
+    println(diagnostic.count())
+
 
     diag_df.unpersist()
     event_df.unpersist()

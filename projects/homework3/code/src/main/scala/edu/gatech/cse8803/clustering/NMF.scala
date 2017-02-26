@@ -44,11 +44,6 @@ object NMF {
      * H = H.* W^T^V ./ (W^T^W H)
      * W = W.* VH^T^ ./ (W H H^T^)
      */
-    //var Hs = Matrix
-    //var newH = BDM
-    //var Ws = Matrix
-    //var newW = RowMatrix
-
     while ( iterCount < maxIterations && errorDiff > convergenceTol){
 
       val Hs = H*H.t
@@ -57,8 +52,7 @@ object NMF {
 
       val Ws = toBreezeMatrix(W.computeGramianMatrix())
 
-      val newH = H :* (computeWTV(W, V) :/ (Ws * H).toDenseMatrix)
-
+      val newH = H :* (computeWTV(W, V)+2.0e-15 :/ (Ws * H).toDenseMatrix + 2.0e-15)
 
       val newError = getError(V, newW, newH)
 
@@ -73,7 +67,6 @@ object NMF {
 
       println("ERROR!!!!!!!!!!!!!!!!!!!")
       println(errorDiff)
-      //println(error)
       println(iterCount)
 
       iterCount = iterCount + 1
@@ -81,9 +74,7 @@ object NMF {
 
 
 
-    /** TODO: Remove the placeholder for return and replace with correct values */
     (W, H)
-    //(new RowMatrix(V.rows.map(_ => BDV.rand[Double](k)).map(fromBreeze).cache), BDM.rand[Double](k, V.numCols().toInt))
   }
 
 
@@ -157,7 +148,7 @@ object NMF {
   /** dot product of two RowMatrixes */
   def dotProd(X: RowMatrix, Y: RowMatrix): RowMatrix = {
     val rows = X.rows.zip(Y.rows).map{case (v1: Vector, v2: Vector) =>
-      toBreezeVector(v1) :* toBreezeVector(v2)
+      (toBreezeVector(v1) :* toBreezeVector(v2))
     }.map(fromBreeze)
     new RowMatrix(rows)
   }
@@ -165,7 +156,7 @@ object NMF {
   /** dot division of two RowMatrixes */
   def dotDiv(X: RowMatrix, Y: RowMatrix): RowMatrix = {
     val rows = X.rows.zip(Y.rows).map{case (v1: Vector, v2: Vector) =>
-      toBreezeVector(v1) :/ toBreezeVector(v2).mapValues(_ + 2.0e-15)
+      toBreezeVector(v1)+2.0e-15 :/ toBreezeVector(v2).mapValues(_ + 2.0e-15)
     }.map(fromBreeze)
     new RowMatrix(rows)
   }
