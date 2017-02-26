@@ -104,8 +104,6 @@ object T2dmPhenotype {
 
   def isCase(medication: RDD[Medication], diagnostic: RDD[Diagnostic]): RDD[(String, Int)]= {
 
-    //val sc = medication.sparkContext
-
     val step1 = diagnostic
       .filter(y => !T1DM_DX.contains(y.code))
       .map( x => x.patientID)
@@ -169,67 +167,6 @@ object T2dmPhenotype {
       .map( rightMeds )
       .filter( x => x._2 == 1 )
 
-    //val step1 = diagnostic
-      //.filter(y => !T1DM_DX.contains(y.code))
-      //.filter(y => T2DM_DX.contains(y.code))
-      //.map( x => (x.patientID, 1))
-      //.cache()
-
-    //val split1 = medication
-      //.filter(y => !T1DM_MED.contains(y.medicine.toLowerCase()))
-      //.map( x => (x.patientID, 1))
-
-    //val split2 = medication
-      //.filter(y => T1DM_MED.contains(y.medicine.toLowerCase()))
-
-    //val split3 = split2
-      //.filter(y => !T2DM_MED.contains(y.medicine.toLowerCase()))
-      //.map( x => (x.patientID, 1))
-
-    //def firstOccurrence(rdd: (String, Iterable[Medication])): Medication = {
-      //val by_date = rdd._2.map( x => (x.date, x)).toSeq
-
-      //val sorted = scala.util.Sorting.stableSort(by_date,
-        //(x:(Date, Medication), y:(Date, Medication)) => x._1.before(y._1))
-      //sorted.head._2
-    //}
-
-    //val first_t1 = medication
-      //.filter( y => T1DM_MED.contains(y.medicine.toLowerCase()))
-      //.map( y => (y.patientID, y))
-      //.groupByKey()
-      //.map( firstOccurrence )
-      //.map( y => (y.patientID, y))
-      //.cache()
-
-    //val first_t2 = medication
-      //.filter( y => T2DM_MED.contains(y.medicine.toLowerCase()))
-      //.map( y => (y.patientID, y))
-      //.groupByKey()
-      //.map( firstOccurrence )
-      //.map( y => (y.patientID, y))
-      //.cache()
-
-    //val joined_t = first_t1.join(first_t2)
-      //.filter( y => y._2._1.date.before(y._2._2.date))
-      //.map( y => (y._1, 1))
-      //.cache()
-
-
-    //TODO: Last step
-    //val final1 = split1.intersection(step1).cache()
-    //val final2 = split3.intersection(step1).cache()
-    //val final3 = joined_t.intersection(step1).cache()
-    //val output = final1.union(final2).union(final3).distinct(16)
-
-    //step1.unpersist()
-    //split1.unpersist()
-    //first_t1.unpersist()
-    //first_t2.unpersist()
-
-
-    //println(output.first())
-    //
     medByID
   }
 
@@ -273,9 +210,6 @@ object T2dmPhenotype {
       .map( x => (x.patientID, 2))
 
     val output = step1.intersection(step2, 16).distinct(16)
-
-    //println("isControl!!!")
-    //println(output.first())
 
     output
   }

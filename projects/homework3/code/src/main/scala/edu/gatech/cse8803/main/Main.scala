@@ -42,14 +42,14 @@ object Main {
 
     /** conduct phenotyping */
     println("Phenotyping...")
-    val phenotypeLabel = T2dmPhenotype.transform(medication, labResult, diagnostic)
+    val phenotypeLabel = T2dmPhenotype.transform(medication, labResult, diagnostic).cache()
 
     /** feature construction with all features */
     println("Feature Construction...")
     val featureTuples = sc.union(
-      FeatureConstruction.constructDiagnosticFeatureTuple(diagnostic),
-      FeatureConstruction.constructLabFeatureTuple(labResult),
-      FeatureConstruction.constructMedicationFeatureTuple(medication)
+      FeatureConstruction.constructDiagnosticFeatureTuple(diagnostic).cache(),
+      FeatureConstruction.constructLabFeatureTuple(labResult).cache(),
+      FeatureConstruction.constructMedicationFeatureTuple(medication).cache()
     )
 
     val rawFeatures = FeatureConstruction.construct(sc, featureTuples)
@@ -87,7 +87,7 @@ object Main {
     /** reduce dimension */
     val mat: RowMatrix = new RowMatrix(rawFeatureVectors)
     val pc: Matrix = mat.computePrincipalComponents(10) // Principal components are stored in a local dense matrix.
-    val featureVectors = mat.multiply(pc).rows
+    val featureVectors = mat.multiply(pc).rows.cache()
 
     val densePc = Matrices.dense(pc.numRows, pc.numCols, pc.toArray).asInstanceOf[DenseMatrix]
     /** transform a feature into its reduced dimension representation */
@@ -192,12 +192,12 @@ object Main {
     val med_selection = med_df.select("Member_ID", "Order_Date", "Drug_Name")
     val medication: RDD[Medication] = med_selection.map( x => Medication(x.getString(0),
       dateFormat.parse(x.getString(1)),
-      x.getString(2))).cache()//.sample(true, .01)
+      x.getString(2))).persist(StorageLevel.DISK_ONLY)
 
-    println("MED!!!!")
-    println(medication.count())
+    medication.count()
     med_df.unpersist()
     med_selection.unpersist()
+
 
 
     val lab_df = CSVUtils.loadCSVAsTable(sqlContext,
@@ -211,31 +211,29 @@ object Main {
     val labResult: RDD[LabResult] = lab_3.map( x => LabResult(x.getString(0),
       dateFormat.parse(x.getString(1)),
       x.getString(2),
-      x.getDouble(3))).cache()//.sample(true, .01)
+      x.getDouble(3))).persist(StorageLevel.DISK_ONLY)
 
-    println("LAB!!!!")
-    println(labResult.count())
+    labResult.count()
+
     lab_df.unpersist()
     lab_1.unpersist()
     lab_2.unpersist()
     lab_3.unpersist()
 
-
     val diag_df = CSVUtils.loadCSVAsTable(sqlContext,
     "data/encounter_dx_INPUT.csv", "Diagnostic")//.sample(true, .01)
+
+    val diagIDs = diag_df.select("Encounter_ID").collect.toSet
     val event_df = CSVUtils.loadCSVAsTable(sqlContext,
-    "data/encounter_INPUT.csv", "Diagnostic")//.sample(true, .01)
-    val full_df = event_df.join(diag_df, event_df.col("Encounter_ID").equalTo(diag_df("Encounter_ID")))
-    val full_selection = full_df.select("Member_ID", "Encounter_DateTime", "code")
+    "data/encounter_INPUT.csv", "Diagnostic").select("Encounter_ID", "Member_ID", "Encounter_DateTime")//.sample(true, .01)
+    val full_df = diag_df.join(event_df, diag_df.col("Encounter_ID").equalTo(event_df("Encounter_ID")))
+    val full_selection = full_df.select("Member_ID", "Encounter_DateTime", "code").na.drop()
 
     val diagnostic: RDD[Diagnostic] = full_selection.map( x => Diagnostic(x.getString(0),
       dateFormat.parse(x.getString(1)),
-      x.getString(2))).cache()
+      x.getString(2))).persist(StorageLevel.DISK_ONLY)
 
-    println("DIAG!!!!")
-    println(diagnostic.count())
-
-
+    diagnostic.count()
     diag_df.unpersist()
     event_df.unpersist()
     full_df.unpersist()
@@ -254,13 +252,13 @@ object Main {
       .set("spark.memory.storageFraction", "0.75")
       .set("spark.default.parallelism", "30")
       .set("spark.local.dir", "/home/jeff/tmp")
-      .set("spark.shuffle.file.buffer", "20m")
+      .set("spark.shuffle.file.buffer", "1m")
       .set("spark.cores.max", "32")
 
     new SparkContext(conf)
   }
 
-  def createContext(appName: String): SparkContext = createContext(appName, "local[16]")
+  def createContext(appName: String): SparkContext = createContext(appName, "local[8]")
 
-  def createContext: SparkContext = createContext("CSE 8803 Homework Two Application", "local[16]")
+  def createContext: SparkContext = createContext("CSE 8803 Homework Two Application", "local[8]")
 }
