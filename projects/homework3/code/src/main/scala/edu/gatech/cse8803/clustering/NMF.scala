@@ -24,43 +24,38 @@ object NMF {
    * @return two matrixes W and H in RowMatrix and DenseMatrix format respectively
    */
   def run(V: RowMatrix, k: Int, maxIterations: Int, convergenceTol: Double = 1e-4): (RowMatrix, BDM[Double]) = {
+    println("NMF Run")
     val sc = V.rows.sparkContext
-    /**
-     * TODO 1: Implement your code here
-     * Initialize W, H randomly
-     * Calculate the initial error (Euclidean distance between V and W * H)
-     */
-    var W = getRowMatrix(BDM.rand[Double](V.numRows().toInt, k), V.numCols().toInt, sc)
+
+    //var W = getRowMatrix(BDM.rand[Double](V.numRows().toInt, k), k, sc, V.rows.getNumPartitions)
+
+    val vects = V.rows
+      .map( x => fromBreeze(BDV.rand[Double](k)))
+
+
+    var W = new RowMatrix(vects)
     var H = BDM.rand[Double](k, V.numCols().toInt)
-    var errorDiff = getError(V, W, H)
+
+    println("Getting Error Diff")
+    var errorDiff = 10.0
     var error = getError(V, W, H)
 
     var iterCount = 0
-
-    /**
-     * TODO 2: Implement your code here
-     * Iteratively update W, H in a parallel fashion until error falls below the tolerance value
-     * The updating equations are,
-     * H = H.* W^T^V ./ (W^T^W H)
-     * W = W.* VH^T^ ./ (W H H^T^)
-     */
+    println("Entering Loop")
     while ( iterCount < maxIterations && errorDiff > convergenceTol){
 
       val Hs = H*H.t
-
-      val newW = dotDiv(dotProd(W, V.multiply(fromBreeze(H.t))), W.multiply(fromBreeze(Hs)))
+      W = dotDiv(dotProd(W, V.multiply(fromBreeze(H.t))), W.multiply(fromBreeze(Hs)))
 
       val Ws = toBreezeMatrix(W.computeGramianMatrix())
 
-      val newH = H :* (computeWTV(W, V)+2.0e-15 :/ (Ws * H).toDenseMatrix + 2.0e-15)
+      H = H :* (computeWTV(W, V)+2.0e-15 :/ (Ws * H).toDenseMatrix + 2.0e-15)
 
-      val newError = getError(V, newW, newH)
+      val newError = getError(V, W, H)
 
       errorDiff = abs(newError - error)
 
       error = newError
-      H = newH
-      W = newW
 
       W.rows.cache()
       V.rows.cache()
@@ -97,28 +92,48 @@ object NMF {
   }
 
   def transpose(X: RowMatrix): RowMatrix = {
-    getRowMatrix(getDenseMatrix(X).t, X.numRows().toInt, X.rows.sparkContext)
+    getRowMatrix(getDenseMatrix(X).t, X.numRows().toInt, X.rows.sparkContext, X.rows.getNumPartitions)
   }
 
 
   def getError(V: RowMatrix, W: RowMatrix, H: BDM[Double]): Double = {
+    println("W shape")
+    println (W.numRows())
+    println (W.numCols())
+
+    println("V shape")
+    println (V.numRows())
+    println (V.numCols())
+
+    println("H shape")
+    println (H.rows)
+    println (H.cols)
+
+
     val WH = multiply(W, H)
+
+    println("WH shape")
+    println (WH.numRows())
+    println (WH.numCols())
+
+    println(WH.rows.count())
+    println("MULTIPLIED!!!!!")
     val diff = getDenseMatrix(V)-getDenseMatrix(WH)
     var error = sqrt(sum(diff :* diff))
 
     error
   }
 
-  def getRowMatrix(X: BDM[Double], numRows: Int, sc: SparkContext): RowMatrix = {
+  def getRowMatrix(X: BDM[Double], numCols: Int, sc: SparkContext, numPartitions: Int): RowMatrix = {
       val output = X
         .t
         .toDenseVector
         .toArray
-        .grouped(numRows)
+        .grouped(numCols)
         .toList
         .map( Vectors.dense )
 
-      val byRow = sc.parallelize(output)
+      val byRow = sc.parallelize(output).repartition(numPartitions)
 
       new RowMatrix(byRow)
   }
@@ -128,10 +143,6 @@ object NMF {
     val data = X.rows.map( _.toArray ).collect().flatten
     val rows = X.numRows()
     val cols = X.numCols()
-    //println("Rows:")
-    //println(rows)
-    //println("Cols:")
-    //println(cols)
 
     val denseMat = new BDM(cols.toInt, rows.toInt, data).t
     denseMat
@@ -147,16 +158,61 @@ object NMF {
 
   /** dot product of two RowMatrixes */
   def dotProd(X: RowMatrix, Y: RowMatrix): RowMatrix = {
+      println("dotProd")
+      println("X partitions")
+      println(X.rows.getNumPartitions)
+      println(X.numRows())
+      println(X.numCols())
+      println("Y partitions")
+      println(Y.rows.getNumPartitions)
+      println(Y.numRows())
+      println(Y.numCols())
+    //val xRows = X.rows
+      //.zipWithIndex
+      //.map( x => (x._2, x._1))
+
+    //val yRows = Y.rows
+      //.zipWithIndex
+      //.map( x => (x._2, x._1))
+
+    //val zippedRows = xRows.join(yRows).map(_._2)
+    //val rows = zippedRows.map{case (v1: Vector, v2: Vector) =>
+      //(toBreezeVector(v1) :* toBreezeVector(v2))
+    //}.map(fromBreeze)
+
     val rows = X.rows.zip(Y.rows).map{case (v1: Vector, v2: Vector) =>
-      (toBreezeVector(v1) :* toBreezeVector(v2))
+      toBreezeVector(v1) :* toBreezeVector(v2)
     }.map(fromBreeze)
     new RowMatrix(rows)
   }
 
   /** dot division of two RowMatrixes */
   def dotDiv(X: RowMatrix, Y: RowMatrix): RowMatrix = {
+      println("dotDiv")
+      println("X partitions")
+      println(X.rows.getNumPartitions)
+      println(X.numRows())
+      println(X.numCols())
+      println("Y partitions")
+      println(Y.rows.getNumPartitions)
+      println(Y.numRows())
+      println(Y.numCols())
+    //val xRows = X.rows
+      //.zipWithIndex
+      //.map( x => (x._2, x._1))
+
+    //val yRows = Y.rows
+      //.zipWithIndex
+      //.map( x => (x._2, x._1))
+
+    //val zippedRows = xRows.join(yRows).map(_._2)
+
+    //val rows = zippedRows.map{case (v1: Vector, v2: Vector) =>
+      //toBreezeVector(v1)+2.0e-15 :/ toBreezeVector(v2).mapValues(_ + 2.0e-15)
+    //}.map(fromBreeze)
+
     val rows = X.rows.zip(Y.rows).map{case (v1: Vector, v2: Vector) =>
-      toBreezeVector(v1)+2.0e-15 :/ toBreezeVector(v2).mapValues(_ + 2.0e-15)
+      toBreezeVector(v1) :/ toBreezeVector(v2).mapValues(_ + 2.0e-15)
     }.map(fromBreeze)
     new RowMatrix(rows)
   }

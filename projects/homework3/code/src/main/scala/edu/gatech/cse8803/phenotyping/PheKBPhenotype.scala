@@ -33,11 +33,6 @@ object T2dmPhenotype {
     "tolazamide", "acetohexamide", "troglitazone", "tolbutamide", "avandia",
     "actos", "actos", "glipizide")
 
-  val ABNORMAL_LABS = Map( "HbA1c" -> 6.0, "Hemoglobin A1c" -> 6.0,
-    "Fasting Glucose" -> 110, "Fasting blood glucose" -> 110,
-    "fasting plasma glucose" -> 110, "Glucose" -> 110, "glucose" -> 110,
-    "Glucose, Serum" -> 110)
-
   val DM_RELATED_DX = Set("790.21", "790.22", "790.2", "790.29", "648.81",
     "648.82", "648.83", "648.84", "648.0", "648.00", "648.01", "648.02",
     "648.03", "648.04", "791.5", "277.7", "V77.1", "256.4", "250.*")
@@ -62,47 +57,42 @@ object T2dmPhenotype {
     /** Find CASE Patients */
     println("Finding CASE patients...")
     val casePatients = isCase(medication, diagnostic)
-    println(casePatients.first())
+    println(casePatients.count())
 
     /** Find CONTROL Patients */
     println("Finding CONTROL patients...")
-    val controlPatients = isControl(labResult, diagnostic)
-    println(controlPatients.first())
+    val controlPatients = isControl(labResult, diagnostic).subtract(casePatients)
+    println(controlPatients.count())
 
     /** Find OTHER Patients */
     println("Finding OTHER patients...")
     // union case and control,
     val case_control_id = casePatients
       .union(controlPatients)
-      .map( x => x._1 )
+      //.map( x => x._1 )
 
     // map over all arrays, saving patientID, (get all patientIDs)
-    //val med_patients = medication.map( x => x.patientID).cache()
     val diag_patients = diagnostic.map( x => x.patientID).cache()
-    //val lab_patients = labResult.map( x => x.patientID).cache()
 
     val all_patients = diag_patients.distinct()
-      //.union(diag_patients)
-      //.union(lab_patients)
-      //.distinct()
 
-    //med_patients.unpersist()
     diag_patients.unpersist()
-    //lab_patients.unpersist()
 
     // difference the sets,
     val others = all_patients
       .subtract(case_control_id)
       .map( x => (x, 3))
 
+    val cases = casePatients.map( x => (x, 1))
+    val control = controlPatients.map( x => (x, 2))
     /** Once you find patients for each group, make them as a single RDD[(String, Int)] */
-    val phenotypeLabel = casePatients.union(controlPatients).union(others)
+    val phenotypeLabel = cases.union(control).union(others)
 
     /** Return */
     phenotypeLabel
   }
 
-  def isCase(medication: RDD[Medication], diagnostic: RDD[Diagnostic]): RDD[(String, Int)]= {
+  def isCase(medication: RDD[Medication], diagnostic: RDD[Diagnostic]): RDD[(String)]= {
 
     val step1 = diagnostic
       .filter(y => !T1DM_DX.contains(y.code))
@@ -113,7 +103,22 @@ object T2dmPhenotype {
       .map( x => x.patientID)
 
     // All patients that were not T1, but wer T2
-    val filteredDiag = step1.intersection(step2).collect.toSet
+    val filteredDiag = step1.intersection(step2).cache()
+
+    val initKeepers = medication
+      //.filter(y => T1DM_MED.contains(y.medicine.toLowerCase())) //order t1 meds
+      .map( _.patientID)
+
+    val finalKeepers = filteredDiag
+        .subtract(initKeepers)
+        .map( x => (x, 1))
+
+    val filteredDiagSet = filteredDiag.collect.toSet
+
+    println("NO DIAG")
+    println(filteredDiagSet.size)
+    println(finalKeepers.count())
+
 
     def firstOccurrence(rdd: Iterable[Medication]): Medication = {
       val by_date = rdd.map( x => (x.date, x)).toSeq
@@ -130,7 +135,6 @@ object T2dmPhenotype {
       var precedes = false
 
       val patientID = rdd._1
-
       val medList = rdd._2
 
       val medT1 = medList
@@ -150,6 +154,7 @@ object T2dmPhenotype {
           val first_t2 = firstOccurrence(medT2)
 
           precedes = first_t2.date.before(first_t1.date)
+
         }
       }
 
@@ -161,55 +166,78 @@ object T2dmPhenotype {
     }
 
     val medByID = medication
-      .filter( x => filteredDiag.contains(x.patientID))
+      .filter( x => filteredDiagSet.contains(x.patientID))
       .map( x => (x.patientID, x))
       .groupByKey()
       .map( rightMeds )
       .filter( x => x._2 == 1 )
 
-    medByID
+    medByID.union(finalKeepers).map( _._1)
   }
 
-  def isControl(labResult: RDD[LabResult], diagnostic: RDD[Diagnostic]): RDD[(String, Int)] = {
+  def isControl(labResult: RDD[LabResult], diagnostic: RDD[Diagnostic]): RDD[(String)] = {
 
-    def isNormalLab(row: LabResult): Boolean = {
-      var out = true
-      if (row.testName == "HbA1c" && row.value >= 6.0) {
-        out = false
+    def isAbnormalLab(row: LabResult): Boolean = {
+      var out = false
+      if (row.testName.toLowerCase() == "hba1c" && row.value >= 6.0) {
+        out = true
       }
-      else if ( row.testName == "Fasting Glucose" && row.value >= 110) {
-        out = false
+      else if ( row.testName.toLowerCase() == "hemoglobin a1c" && row.value >= 6.0) {
+        out = true
       }
-      else if ( row.testName == "Fasting blood glucose"  && row.value >= 110) {
-        out = false
+      else if ( row.testName.toLowerCase() == "fasting glucose" && row.value >= 110) {
+        out = true
       }
-      else if ( row.testName == "fasting plasma glucose" && row.value >= 110) {
-        out = false
+      else if ( row.testName.toLowerCase() == "fasting blood glucose"  && row.value >= 110) {
+        out = true
       }
-      else if ( row.testName == "Glucose" && row.value > 110) {
-        out = false
+      else if ( row.testName.toLowerCase() == "fasting plasma glucose" && row.value >= 110) {
+        out = true
       }
-      else if ( row.testName == "glucose" && row.value > 110) {
-        out = false
+      else if ( row.testName.toLowerCase() == "glucose" && row.value > 110) {
+        out = true
       }
-      else if ( row.testName == "Glucose, Serum" && row.value > 110) {
-        out = false
+      else if ( row.testName.toLowerCase() == "glucose" && row.value > 110) {
+        out = true
+      }
+      else if ( row.testName.toLowerCase() == "glucose, serum" && row.value > 110) {
+        out = true
       }
 
       out
     }
 
+
+    val glucoseTests = Set( "HbA1c", "Hemoglobin A1c", "Fasting Glucose",
+      "Fasting blood glucose", "fasting plasma glucose", "Glucose", "glucose",
+      "Glucose, Serum")
+
     val step1 = labResult
-      .filter( x => x.testName.toLowerCase().contains("glucose") )
-      .filter( isNormalLab )
-      .map( x => (x.patientID, 2))
+      .filter( x => glucoseTests.contains(x.testName) )
+      .map( _.patientID )
+      .distinct()
+
+    println("HERE!!!!!!!!!!!!!!!")
+    println(step1.count())
+
+    val step3 = labResult
+      .filter( x => glucoseTests.contains(x.testName) )
+      .filter( x => !isAbnormalLab(x) )
+      .map( _.patientID )
+      .distinct()
+
+
+    val step4 = step1.intersection(step3)
+
+    println(step4.count())
 
     val step2 = diagnostic
       .filter( x => !DM_RELATED_DX.map( y => x.code.matches(y))
                                   .reduce( (acc, z) => acc || z))
-      .map( x => (x.patientID, 2))
+      .map( _.patientID)
+      .distinct()
 
-    val output = step1.intersection(step2, 16).distinct(16)
+    val output = step4.intersection(step2).distinct()
 
     output
   }

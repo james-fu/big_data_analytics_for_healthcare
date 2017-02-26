@@ -43,6 +43,7 @@ object Main {
     /** conduct phenotyping */
     println("Phenotyping...")
     val phenotypeLabel = T2dmPhenotype.transform(medication, labResult, diagnostic).cache()
+    println(phenotypeLabel.count())
 
     /** feature construction with all features */
     println("Feature Construction...")
@@ -51,9 +52,11 @@ object Main {
       FeatureConstruction.constructLabFeatureTuple(labResult).cache(),
       FeatureConstruction.constructMedicationFeatureTuple(medication).cache()
     )
+    println(featureTuples.count())
 
-    val rawFeatures = FeatureConstruction.construct(sc, featureTuples)
+    val rawFeatures = FeatureConstruction.construct(sc, featureTuples).cache()
 
+    println("Test Clustering...")
     val (kMeansPurity, gaussianMixturePurity, nmfPurity) = testClustering(phenotypeLabel, rawFeatures)
     println(f"[All feature] purity of kMeans is: $kMeansPurity%.5f")
     println(f"[All feature] purity of GMM is: $gaussianMixturePurity%.5f")
@@ -66,8 +69,9 @@ object Main {
       FeatureConstruction.constructMedicationFeatureTuple(medication, candidateMedication)
     )
 
-    val filteredRawFeatures = FeatureConstruction.construct(sc, filteredFeatureTuples)
+    val filteredRawFeatures = FeatureConstruction.construct(sc, filteredFeatureTuples).cache()
 
+    println("Test Clustering...")
     val (kMeansPurity2, gaussianMixturePurity2, nmfPurity2) = testClustering(phenotypeLabel, filteredRawFeatures)
     println(f"[Filtered feature] purity of kMeans is: $kMeansPurity2%.5f")
     println(f"[Filtered feature] purity of GMM is: $gaussianMixturePurity2%.5f")
@@ -106,11 +110,15 @@ object Main {
 
     val labels = phenotypeLabel
       .map( _._2)
-      .repartition(5)
+      .zipWithIndex
+      .map( x => (x._2, x._1))
       .cache()
+
+    println("Labels:")
+    println(labels.count())
     //val km_model = KMeans.train(featureVectors, 3, 20)
     //val k_clusters = km_model.predict(featureVectors)
-
+    println("KMeans")
     val kmeans = new KMeans()
       .setK(3)
       .setMaxIterations(20)
@@ -118,10 +126,19 @@ object Main {
 
     val k_model = kmeans.run(featureVectors)
     val k_clusters = k_model.predict(featureVectors)
+      .zipWithIndex
+      .map( x => (x._2, x._1))
+
+    println("K_Clusters:")
+    println(k_clusters.count())
 
 
     // use zip before passing to purity
-    val kMeansPurity = Metrics.purity(labels.zip(k_clusters.repartition(5)))
+    println("Purity Calc")
+    val toPurity = labels.join(k_clusters).map(_._2)
+    println(toPurity.count())
+    println(toPurity.first())
+    val kMeansPurity = Metrics.purity(toPurity)
 
 
     /** TODO: GMMM Clustering using spark mllib
@@ -132,7 +149,7 @@ object Main {
       *  Find Purity using that RDD as an input to Metrics.purity
       *  Remove the placeholder below after your implementation
       **/
-
+    println("GMM")
     val gmm = new GaussianMixture()
       .setK(3)
       .setMaxIterations(20)
@@ -140,9 +157,21 @@ object Main {
 
     val gmm_model = gmm.run(featureVectors)
     val g_clusters = gmm_model.predict(featureVectors)
+      .zipWithIndex
+      .map( x => (x._2, x._1))
 
-    val gaussianMixturePurity = Metrics.purity(labels.zip(g_clusters.repartition(5)))
+    println("G_Clusters:")
+    println(g_clusters.count())
 
+
+    // use zip before passing to purity
+    println("Purity Calc")
+    val toPurityG = labels.join(g_clusters).map(_._2)
+    println(toPurityG.count())
+    println(toPurityG.first())
+    val gaussianMixturePurity = Metrics.purity(toPurityG)
+
+    println("NMF")
     /** NMF */
     val rawFeaturesNonnegative = rawFeatures.map({ case (patientID, f)=> Vectors.dense(f.toArray.map(v=>Math.abs(v)))})
     val (w, _) = NMF.run(new RowMatrix(rawFeaturesNonnegative), 3, 100)
