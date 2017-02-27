@@ -43,7 +43,7 @@ object Main {
     /** conduct phenotyping */
     println("Phenotyping...")
     val phenotypeLabel = T2dmPhenotype.transform(medication, labResult, diagnostic).cache()
-    println(phenotypeLabel.count())
+    //println(phenotypeLabel.count())
 
     /** feature construction with all features */
     println("Feature Construction...")
@@ -52,11 +52,11 @@ object Main {
       FeatureConstruction.constructLabFeatureTuple(labResult).cache(),
       FeatureConstruction.constructMedicationFeatureTuple(medication).cache()
     )
-    println(featureTuples.count())
+    //println(featureTuples.count())
 
     val rawFeatures = FeatureConstruction.construct(sc, featureTuples).cache()
 
-    println("Test Clustering...")
+    //println("Test Clustering...")
     val (kMeansPurity, gaussianMixturePurity, nmfPurity) = testClustering(phenotypeLabel, rawFeatures)
     println(f"[All feature] purity of kMeans is: $kMeansPurity%.5f")
     println(f"[All feature] purity of GMM is: $gaussianMixturePurity%.5f")
@@ -114,13 +114,14 @@ object Main {
       .map( x => (x._2, x._1))
       .cache()
 
-    println("Labels:")
-    println(labels.count())
+    val k = 3;
+    //println("Labels:")
+    //println(labels.count())
     //val km_model = KMeans.train(featureVectors, 3, 20)
     //val k_clusters = km_model.predict(featureVectors)
-    println("KMeans")
+    //println("KMeans")
     val kmeans = new KMeans()
-      .setK(3)
+      .setK(k)
       .setMaxIterations(20)
       .setSeed(8803L)
 
@@ -129,15 +130,37 @@ object Main {
       .zipWithIndex
       .map( x => (x._2, x._1))
 
-    println("K_Clusters:")
-    println(k_clusters.count())
+    //println("K_Clusters:")
+    //println(k_clusters.count())
 
 
     // use zip before passing to purity
     println("Purity Calc")
     val toPurity = labels.join(k_clusters).map(_._2)
-    println(toPurity.count())
+    //println(toPurity.count())
     println(toPurity.first())
+    //
+
+    var kTable = toPurity
+      .filter( x => x._2 == 0 )
+      .map( x => x._1)
+      .countByValue()
+
+    println("KTable::::::::::::::::::::::::")
+    println(kTable.toString)
+
+    kTable = toPurity
+      .filter( x => x._2 == 1 )
+      .map( x => x._1)
+      .countByValue()
+    println(kTable.toString)
+
+    kTable = toPurity
+      .filter( x => x._2 == 2 )
+      .map( x => x._1)
+      .countByValue()
+    println(kTable.toString)
+
     val kMeansPurity = Metrics.purity(toPurity)
 
 
@@ -149,9 +172,9 @@ object Main {
       *  Find Purity using that RDD as an input to Metrics.purity
       *  Remove the placeholder below after your implementation
       **/
-    println("GMM")
+    //println("GMM")
     val gmm = new GaussianMixture()
-      .setK(3)
+      .setK(k)
       .setMaxIterations(20)
       .setSeed(8803L)
 
@@ -160,15 +183,35 @@ object Main {
       .zipWithIndex
       .map( x => (x._2, x._1))
 
-    println("G_Clusters:")
-    println(g_clusters.count())
+    //println("G_Clusters:")
+    //println(g_clusters.count())
 
 
     // use zip before passing to purity
-    println("Purity Calc")
+    //println("Purity Calc")
     val toPurityG = labels.join(g_clusters).map(_._2)
-    println(toPurityG.count())
-    println(toPurityG.first())
+    //println(toPurityG.count())
+    //println(toPurityG.first())
+    var gTable = toPurityG
+      .filter( x => x._2 == 0 )
+      .map( x => x._1)
+      .countByValue()
+
+    println("GTable::::::::::::::::::::::::")
+    println(gTable.toString)
+
+    gTable = toPurityG
+      .filter( x => x._2 == 1 )
+      .map( x => x._1)
+      .countByValue()
+    println(gTable.toString)
+
+    gTable = toPurityG
+      .filter( x => x._2 == 2 )
+      .map( x => x._1)
+      .countByValue()
+    println(gTable.toString)
+
     val gaussianMixturePurity = Metrics.purity(toPurityG)
 
     println("NMF")
@@ -184,6 +227,26 @@ object Main {
     // which is a RDD of (clusterNumber, phenotypeLabel) pairs
     val nmfClusterAssignmentAndLabel = assignmentsWithPatientIds.join(phenotypeLabel).map({case (patientID,value)=>value})
     // Obtain purity value
+    var nmfTable = nmfClusterAssignmentAndLabel
+      .filter( x => x._1 == 0 )
+      .map( x => x._2)
+      .countByValue()
+
+    println("NMF Table::::::::::::::::::::::::")
+    println(nmfTable.toString)
+
+    nmfTable = nmfClusterAssignmentAndLabel
+      .filter( x => x._1 == 1 )
+      .map( x => x._2)
+      .countByValue()
+    println(nmfTable.toString)
+
+    nmfTable = nmfClusterAssignmentAndLabel
+      .filter( x => x._1 == 2 )
+      .map( x => x._2)
+      .countByValue()
+    println(nmfTable.toString)
+
     val nmfPurity = Metrics.purity(nmfClusterAssignmentAndLabel)
 
     (kMeansPurity, gaussianMixturePurity, nmfPurity)
@@ -281,7 +344,7 @@ object Main {
       .set("spark.memory.storageFraction", "0.75")
       .set("spark.default.parallelism", "30")
       .set("spark.local.dir", "/home/jeff/tmp")
-      .set("spark.shuffle.file.buffer", "1m")
+      .set("spark.shuffle.file.buffer", "500k")
       .set("spark.cores.max", "32")
 
     new SparkContext(conf)

@@ -36,12 +36,10 @@ object NMF {
     var W = new RowMatrix(vects)
     var H = BDM.rand[Double](k, V.numCols().toInt)
 
-    println("Getting Error Diff")
     var errorDiff = 10.0
     var error = getError(V, W, H)
 
     var iterCount = 0
-    println("Entering Loop")
     while ( iterCount < maxIterations && errorDiff > convergenceTol){
 
       val Hs = H*H.t
@@ -60,9 +58,9 @@ object NMF {
       W.rows.cache()
       V.rows.cache()
 
-      println("ERROR!!!!!!!!!!!!!!!!!!!")
-      println(errorDiff)
-      println(iterCount)
+      //println("ERROR!!!!!!!!!!!!!!!!!!!")
+      //println(errorDiff)
+      //println(iterCount)
 
       iterCount = iterCount + 1
     }
@@ -97,27 +95,27 @@ object NMF {
 
 
   def getError(V: RowMatrix, W: RowMatrix, H: BDM[Double]): Double = {
-    println("W shape")
-    println (W.numRows())
-    println (W.numCols())
+    //println("W shape")
+    //println (W.numRows())
+    //println (W.numCols())
 
-    println("V shape")
-    println (V.numRows())
-    println (V.numCols())
+    //println("V shape")
+    //println (V.numRows())
+    //println (V.numCols())
 
-    println("H shape")
-    println (H.rows)
-    println (H.cols)
+    //println("H shape")
+    //println (H.rows)
+    //println (H.cols)
 
 
     val WH = multiply(W, H)
 
-    println("WH shape")
-    println (WH.numRows())
-    println (WH.numCols())
+    //println("WH shape")
+    //println (WH.numRows())
+    //println (WH.numCols())
 
-    println(WH.rows.count())
-    println("MULTIPLIED!!!!!")
+    //println(WH.rows.count())
+    //println("MULTIPLIED!!!!!")
     val diff = getDenseMatrix(V)-getDenseMatrix(WH)
     var error = sqrt(sum(diff :* diff))
 
@@ -158,15 +156,15 @@ object NMF {
 
   /** dot product of two RowMatrixes */
   def dotProd(X: RowMatrix, Y: RowMatrix): RowMatrix = {
-      println("dotProd")
-      println("X partitions")
-      println(X.rows.getNumPartitions)
-      println(X.numRows())
-      println(X.numCols())
-      println("Y partitions")
-      println(Y.rows.getNumPartitions)
-      println(Y.numRows())
-      println(Y.numCols())
+      //println("dotProd")
+      //println("X partitions")
+      //println(X.rows.getNumPartitions)
+      //println(X.numRows())
+      //println(X.numCols())
+      //println("Y partitions")
+      //println(Y.rows.getNumPartitions)
+      //println(Y.numRows())
+      //println(Y.numCols())
     //val xRows = X.rows
       //.zipWithIndex
       //.map( x => (x._2, x._1))
@@ -188,15 +186,15 @@ object NMF {
 
   /** dot division of two RowMatrixes */
   def dotDiv(X: RowMatrix, Y: RowMatrix): RowMatrix = {
-      println("dotDiv")
-      println("X partitions")
-      println(X.rows.getNumPartitions)
-      println(X.numRows())
-      println(X.numCols())
-      println("Y partitions")
-      println(Y.rows.getNumPartitions)
-      println(Y.numRows())
-      println(Y.numCols())
+      //println("dotDiv")
+      //println("X partitions")
+      //println(X.rows.getNumPartitions)
+      //println(X.numRows())
+      //println(X.numCols())
+      //println("Y partitions")
+      //println(Y.rows.getNumPartitions)
+      //println(Y.numRows())
+      //println(Y.numCols())
     //val xRows = X.rows
       //.zipWithIndex
       //.map( x => (x._2, x._1))
