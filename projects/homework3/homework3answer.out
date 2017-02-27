@@ -1,0 +1,8 @@
+\BOOKMARK [1][-]{section.1}{Programming: Rule based phenotyping}{}% 1
+\BOOKMARK [1][-]{section.2}{Programming: Unsupervised phenotyping via clustering}{}% 2
+\BOOKMARK [2][-]{subsection.2.1}{Feature Construction }{section.2}% 3
+\BOOKMARK [2][-]{subsection.2.2}{Evaluation Metric }{section.2}% 4
+\BOOKMARK [2][-]{subsection.2.3}{K-Means Clustering}{section.2}% 5
+\BOOKMARK [2][-]{subsection.2.4}{Clustering with Gaussian Mixture Model \(GMM\) [5 points]}{section.2}% 6
+\BOOKMARK [2][-]{subsection.2.5}{Discussion on k-means and GMM [6 points]}{section.2}% 7
+\BOOKMARK [1][-]{section.3}{Advanced phenotyping with NMF}{}% 8
