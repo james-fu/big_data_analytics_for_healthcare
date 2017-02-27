@@ -18,7 +18,7 @@ class NmfTest extends FlatSpec with Matchers with BeforeAndAfter {
   before {
     Logger.getRootLogger().setLevel(Level.WARN)
     Logger.getLogger("org").setLevel(Level.WARN)
-    val config = new SparkConf().setAppName("Test NMF").setMaster("local")
+    val config = new SparkConf().setAppName("Test NMF").setMaster("local[8]")
     sparkContext = new SparkContext(config)
   }
 

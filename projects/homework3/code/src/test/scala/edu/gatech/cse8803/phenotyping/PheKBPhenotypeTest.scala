@@ -17,7 +17,7 @@ class PheKBPhenotypeTest extends FlatSpec with BeforeAndAfter with Matchers {
   before {
     Logger.getRootLogger().setLevel(Level.WARN)
     Logger.getLogger("org").setLevel(Level.WARN)
-    val config = new SparkConf().setAppName("Test PheKBPhenotype").setMaster("local")
+    val config = new SparkConf().setAppName("Test PheKBPhenotype").setMaster("local[8]")
     sparkContext = new SparkContext(config)
   }
 

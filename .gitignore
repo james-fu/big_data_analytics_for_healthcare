@@ -1,2 +1,36 @@
 .pyc
 events.csv
+metastore_db/
+data/
+
+# Created by https://www.gitignore.io/api/scala,sbt
+
+### SBT ###
+# Simple Build Tool
+# http://www.scala-sbt.org/release/docs/Getting-Started/Directories.html#configuring-version-control
+
+target/
+lib_managed/
+src_managed/
+project/boot/
+.history
+.cache
+
+### Scala ###
+*.class
+*.log
+
+# sbt specific
+.lib/
+dist/*
+project/plugins/project/
+
+# Scala-IDE specific
+.ensime
+.ensime_cache/
+.scala_dependencies
+.worksheet
+
+# ENSIME specific
+
+# End of https://www.gitignore.io/api/scala,sbt

@@ -41,190 +41,336 @@
   {\end{proof}}
 
 \title{CSE8803: Big Data Analytics in Healthcare \\ Homework 3}
-\author{Jeff McGehee}
+\author{Jimeng Sun}
 \date{Deadline: Feb 26, 2017, 11:55 PM AoE}
 
 \begin{document}
 
 \maketitle
+\begin{itemize}
+\item Discussion is encouraged, but each student must write his/her own answers and explicitly mention any collaborators.
+\item Each student is expected to respect and follow the \href{http://www.honor.gatech.edu/}{ GT Honor Code}.
+\item Please type the submission with \LaTeX\ or Microsoft Word. We \textbf{will not} accept hand written submissions.
+\item Please \textbf{do not} change the filenames and function definitions in the skeleton code provided, as this will cause the test scripts to fail and subsequently no points will be awarded. 
+\end{itemize}
 
-\section{Programming: Rule based phenotyping}
-\textbf{a.} See submission \hfill \break
-\textbf{b.} See submission
+
+\section*{Overview}
+Accurate knowledge of a patient's disease state is crucial which requires knowing accurate phenotypes about patients based on their electronic health records. %Electronic monitoring systems and health records provide rich information for making prediction. 
+%To obtain great data for the purpose of improving the accuracy and utility of predictive modeling, requires a better understanding of the features or concepts in the data. Healthcare data from electronic health records are heterogenous and messy. Phenotyping is important for making sense of the data by turning them into meaningful clinical concepts. Of particular interest among the healthcare community is the identification of specific subgroups of patients in electronic health record datasets. 
+There are several strategies for phenotyping, including supervised rule-based methods as well as unsupervised methods. 	
+In this homework, you will implement both type of phenotyping algorithms. You will be required to implement these using Spark.
+
+\section*{Prerequisites [0 points]}
+This homework is primarily about using Spark with Scala. You can download and install Spark on your local machine by following instructions at \url{http://spark.apache.org/docs/1.3.1/} (tested on 1.3.1 $\thicksim$ 1.6.2, and 2.0 has not compatible API with our code) if you want to to try spark-shell. Alternatively, you can use one of our virtual environments you used for the lab sessions from \url{http://www.sunlab.org/teaching/cse8803/fall2016/lab/environment/}. Programming assignments in this homework actually do not require Spark installation since we use SBT build tool \url{http://www.scala-sbt.org/}. You can also develop code by using an IDE like IntelliJ (\url{https://www.jetbrains.com/idea/}) for your convenience (free community edition is enough for developing homework code, but as a student, you can get education license for full edition) or by using a Notebook platform such as Jupyter or Zeppelin. We provide a virtual environment with pre-installed Jupyter and Zeppelin (\url{http://www.sunlab.org/teaching/cse8803/fall2016/lab/env-docker/}) for those interested in.
 
 
-\section{Programming: Unsupervised phenotyping via clustering}
+% For programming problem, you will be given the code skeleton from a GT GitHub repo. You need to download the skeleton by 
+% \begin{lstlisting}[frame=single, language=bash]
+% cd hw3 #navigate to hw directory
+% git clone https://github.gatech.edu/hsu34/bdh-hw3.git code
+% \end{lstlisting}
 
-\subsection{Feature Construction }
+For programming problem, you will be given the code skeleton and test cases in this zip file.
 
-\textbf{a.} See submission
+Then you need to download data from S3, unzip that and put that into your code directory
+\begin{lstlisting}[frame=single,language=bash]
+cd code
+wget https://s3.amazonaws.com/cse8803bdh/hw3/data.tar.gz
+tar -zxvf data.tar.gz
+\end{lstlisting}
+Note that the data folder should be inside your code folder. 
 
-\subsection{Evaluation Metric }
+If you are a mac user you should be able to use below command to compile and run the code by
+\begin{lstlisting}[frame=single,language=bash]
+sbt/sbt compile run
+\end{lstlisting}
 
-\textbf{a.} See submission
+And to run the test cases:
+\begin{lstlisting}[frame=single,language=bash]
+sbt/sbt compile test
+\end{lstlisting}
 
-\subsection{K-Means Clustering}
-\textbf{a.} See submission \hfill \break
+
+Otherwise, you will need to refer to \href{http://www.scala-sbt.org/0.13/docs/Manual-Installation.html}{SBT installation manual} to update \textit{sbt/sbt} script first. Then you can call in above way.
+
+\section{Programming: Rule based phenotyping [30 points]}
+Phenotyping can be done using a rule-based method. The Phenotype Knowledge Base (PheKB) (\url{https://phekb.org}) provides a set of rule-based methods (typically in the form of decision trees) for determining whether or not a patient fits a particular phenotype.
+
+In this assignment, you will implement a phenotyping algorithm for type-2 diabetes based on the flowcharts below. The algorithm should
+\begin{itemize}
+\item Take as input event data for diagnoses, medications, and lab results.
+\item Return an RDD of patients with labels (\textit{label}=1 if the patient is case, \textit{label}=2 if the patient is control, \textit{label}=3 otherwise). 
+\end{itemize}
+You will implement the \textit{Diabetes Mellitus Type 2} algorithms from PheKB. We have reduced the rules for simplicity. Thus, you should follow the simplified flowchart provided for your homework, but can refer to \url{http://jamia.oxfordjournals.org/content/19/2/219.long} for more details if desired.
+
+The following files in \textit{data} folder will be used as inputs:
+\begin{itemize}
+\item \textbf{encounter\textunderscore INPUT.csv}: Each line represents an envounter. The encounter ID and the patient ID (Member ID) are separate columns. \textit{Hint: sql join}
+\item \textbf{encounter\textunderscore dx\textunderscore INPUT.csv}: Each line represents an encounter. The disgnoses (ICD9 codes) are in this file.
+\item \textbf{medication\textunderscore orders\textunderscore INPUT.csv}: Each line represents a medication order. The name of medication is found in one of the columns on this file.
+\item \textbf{lab\textunderscore results\textunderscore INPUT.csv}: Each line represents a lab result. The name of the lab (use `Result\textunderscore Name'  column), the units for the lab, and the value for the lab are found in specific columns on this file.
+\end{itemize}
+For your project, you will load input CSV files from \texttt{<your\_code\_project\_root>/data/\\<some\_input.csv>}. You are responsible for transforming the above CSV files into RDDs.
+
+The simplified rules which you should follow for phenotyping of Diabetes Mellitus Type 2 are shown below. These rules are based off of the criteria from the PheKB phenotypes, which have been placed in the folder \texttt{/phenotyping\textunderscore resources/}.
+
+\begin{figure}[!h]
+  \centering
+  \includegraphics[width=0.8\textwidth]{rule_case}
+  \caption{Determination of cases}
+  \label{fig:rule_case}
+\end{figure}
+
+\begin{itemize}
+\item \textbf{Requirements for Case patients}: Figure \ref{fig:rule_case} details the rules for determining whether a patient is case. Certain parts of the flowchart involve criteria that you will find in the handout folder \texttt{/phekb\textunderscore criteria/}.
+\begin{itemize}
+\item \texttt{/phekb\textunderscore criteria/T1DM\textunderscore DX.csv}: Any of the ICD codes present in this file will be sufficient to result in \texttt{YES} for the Type 1 DM diagnosis criteria.
+\item \texttt{/phekb\textunderscore criteria/T1DM\textunderscore MED.csv}: Any of the medications present in this file will be sufficient to result in \texttt{YES} for the Order for Type 1 DM medication criteria. Please also use for the criteria Type 2 DM medication precedes Type 1 DM medications.
+\item \texttt{/phekb\textunderscore criteria/T2DM\textunderscore DX.csv}: Any of the ICD codes present in this file will be sufficient to result in \texttt{YES} for the Type 2 DM diagnosis criteria.
+\item \texttt{/phekb\textunderscore criteria/T2DM\textunderscore MED.csv}: Any of the medications present in this file will be sufficient to result in \texttt{YES} for the Order for Type 2 DM medication criteria. Please also use for the criteria Type 2 DM medication precedes Type 1 DM medications.
+\end{itemize}
+\end{itemize}
+
+\begin{figure}[!h]
+  \centering
+  \includegraphics[width=0.8\textwidth]{rule_control}
+  \caption{Determination of controls}
+  \label{fig:rule_control}
+\end{figure}
+
+\begin{itemize}
+\item \textbf{Requirements for Control patients}: Figure \ref{fig:rule_control} details the rules for determining whether a patient is control. Certain parts of the flowchart involve criteria that you will find the handout folder \texttt{/phekb\textunderscore criteria/}.
+\begin{itemize}
+\item \texttt{/phekb\textunderscore criteria/ABNORMAL\textunderscore LAB\textunderscore VALUES\textunderscore DX.csv}: You can refer to these abnormal lab values criteria for controls. 
+\item \texttt{/phekb\textunderscore criteria/DM\textunderscore RELATED\textunderscore DX.csv}: Any of the ICD codes present in this file will be sufficient to result in \texttt{YES} for the Diabetes Mellitus related diagnosis criteria.
+\end{itemize}
+\end{itemize}
+In order to help you verify your steps, expected counts along the different steps have been provided in:
+\begin{itemize}
+\item \texttt{/phenotyping\_resources/expected\_count\_case.png}
+\item \texttt{/phenotyping\_resources/expected\_count\_control.png}
+\end{itemize}
+ Additional hints and notes are at times provided directly in the code comments at the locations of relevance, please read these carefully when provided.
+
+\textbf{a.} Implement \textit{edu.gatech.cse8803.main.Main.loadRddRawData} to load INPUT CSV files in data folder as structured RDD. Follow instructions for turning this in.[5 points]
+\newline
+
+\textbf{b.}  Implement \textit{edu.gatech.cse8803.phenotyping.T2dmPhenotype}. Follow instructions for turning this in. 
+
+- Finding case patients [10 points]
+
+- Finding control patients [10 points]
+
+- Finding other patients [5 points]
+
+
+
+
+
+
+\section{Programming: Unsupervised phenotyping via clustering [40 points]}
+At this point you have implemented a supervised, rule-based phenotyping algorithm. Those type of methods are great for picking out specific diseases, in our case diabetes and rheumatoid arthritis. However, they are not good for discovering new, complex phenotypes. Such phenotypes can be disease subtypes (i.e. severe hypertension, moderate hypertension, mild hypertension) or they can reflect combinations of diseases that patients may present with (e.g. a patient with hypertension and renal failure).
+
+\subsection{Feature Construction [16 points]}
+Given the raw data, you need to start with feature construction. You will need to implement ETL using Spark with similar function as what you did in last homework using Pig. Given that you know which diagnoses (in the form of ICD-9 codes) each patient exhibits, and which medication each patient took, these can be used as features in a clustering model. Using the RDDs that you created in \textit{edu.gatech.cse8803.main.Main.loadRddRawData}, you need to construct features using COUNT aggregation for medication and diagnostics, AVERAGE aggregation for lab test values.
+
+\textbf{a. }Implement feature construction in
+
+\textit{edu.gatech.cse8803.features.FeatureConstruction}. Implement two kinds of feature construction, one constructs features using all available icd codes, lab and medication, and another with only features related to the phenotype. See comments of the source code for details.
+
+\subsection{Evaluation Metric [8 points]}
+Purity is a metrics to measure the quality of clustering, it's defined as
+$$
+purity(\Omega, C) = \frac{1}{N}\sum_k \max_j |w_k \cap c_j|
+$$
+ where $N$ is the number of samples, $k$ is index of clusters and $j$ is index of class. $w_k$ denotes the set of samples in $k$-th cluster and $c_j$ denotes set of samples of class $j$.
+ 
+\textbf{a .} Implement \textit{edu.gatech.cse8803.clustering.Metrics}. 
+
+In this homework you will perform some clustering using Spark. Spark contains MLLib library with implementation of the k- means clustering algorithm and the Gaussian Mixture Model algorithm. 
+
+From clustering, we can discover groups of patients with similar characteristics. Please cluster the patients based upon diagnoses, labs and medications. If there are \textit{d} distinct diagnoses, \textit{l} distinct medications and \textit{m} medications, then there should be \textit{d + l + m} distinct features.
+
+\subsection{K-Means Clustering [5 points] } 
+\textbf{a.} Implement $k$-means clustering for $k=3$. Follow the hints provided in the skeleton code in \textit{edu.gatech.cse8803.main.Main.scala:testClustering}.\\
 \textbf{b.} Compare clustering for the $k=3$ case with the ground truth phenotypes that you computed for the rule-based PheKB algorithms. Specifically, for each of \textit{case}, \textit{control} and \textit{unknown}, report the percentage distribution in the three clusters for the two feature construction strategies. Report the numbers in the format shown in Table ~\ref{tbl:kmeansall} and Table ~\ref{tbl:kmeansfil}. \\
 
-\begin{table}[!h]
+\begin{table}[h]
 \centering
 \begin{tabular}{ c | c | c | c }
   \hline
   Percentage Cluster & Case & Control & Unknown\\
-  \hline
-  Cluster 1 & 38\% & 3\% & 39\% \\
-  Cluster 2 & 2\% & 3\% & 2\% \\
-  Cluster 3 & 60\% & 94\% & 59\% \\
-  \hline
+  \hline                       
+  Cluster 1 & x\% & y\% & z\% \\
+  Cluster 2 & xx\% & yy\% & zz\% \\
+  Cluster 3 & xxx\% & yyy\% & zzz\% \\
+  \hline  
    & \bf{100\%} & \bf{100\%} & \bf{100\%} \\
-  \hline
+  \hline  
 \end{tabular}
-\caption{KMeans Clustering with 3 centers using all features}
+\caption{Clustering with 3 centers using all features}
 \label{tbl:kmeansall}
 \end{table}
 
-\begin{table}[!h]
+\begin{table}[h]
 \centering
 \begin{tabular}{ c | c | c | c }
   \hline
   Percentage Cluster & Case & Control & Unknown\\
-  \hline
-  Cluster 1 & 34\% & 36\% & 38\% \\
-  Cluster 2 & 25\% & 23\% & 20\% \\
-  Cluster 3 & 41\% & 41\% & 42\% \\
-  \hline
+  \hline                       
+  Cluster 1 & x\% & y\% & z\% \\
+  Cluster 2 & xx\% & yy\% & zz\% \\
+  Cluster 3 & xxx\% & yyy\% & zzz\% \\
+  \hline  
    & \bf{100\%} & \bf{100\%} & \bf{100\%} \\
-  \hline
+  \hline  
 \end{tabular}
-\caption{KMeans Clustering with 3 centers using filtered features}
+\caption{Clustering with 3 centers using filtered features}
 \label{tbl:kmeansfil}
 \end{table}
 
 \subsection{Clustering with Gaussian Mixture Model (GMM) [5 points]}
-\textbf{a.} See submission \hfill \break
+\textbf{a.} Implement GaussianMixture for $k=3$. Follow the hints provided in the skeleton code in \textit{edu.gatech.cse8803.main.Main.scala:testClustering}.\\
 \textbf{b.} Compare clustering for the $k=3$ case with the ground truth phenotypes that you computed for the rule-based PheKB algorithms. Specifically, for each of \textit{case}, \textit{control} and \textit{unknown}, report the percentage distribution in the three clusters for the two feature construction strategies. Report the numbers in the format shown in Table ~\ref{tbl:kmeansall} and Table ~\ref{tbl:kmeansfil}. \\
-
-\begin{table}[!h]
-\centering
-\begin{tabular}{ c | c | c | c }
-  \hline
-  Percentage Cluster & Case & Control & Unknown\\
-  \hline
-  Cluster 1 & 36\% & 34\% & 36\% \\
-  Cluster 2 & 9\% & 11\% & 10\% \\
-  Cluster 3 & 55\% & 55\% & 54\% \\
-  \hline
-   & \bf{100\%} & \bf{100\%} & \bf{100\%} \\
-  \hline
-\end{tabular}
-\caption{GMM Clustering with 3 centers using all features}
-\label{tbl:gmmall}
-\end{table}
-
-\begin{table}[!h]
-\centering
-\begin{tabular}{ c | c | c | c }
-  \hline
-  Percentage Cluster & Case & Control & Unknown\\
-  \hline
-  Cluster 1 & 55\% & 55\% & 57\% \\
-  Cluster 2 & 39\% & 38\% & 36\% \\
-  Cluster 3 & 6\% & 7\% & 7\% \\
-  \hline
-   & \bf{100\%} & \bf{100\%} & \bf{100\%} \\
-  \hline
-\end{tabular}
-\caption{GMM Clustering with 3 centers using filtered features}
-\label{tbl:gmmfil}
-\end{table}
 
 \subsection{Discussion on k-means and GMM [6 points]}
 \textbf{a.} Briefly discuss what you observe in 2.3b and 2.4b.\\
-
-In all cases, neither Kmeans nor GMM did a great job of isolating the classes
-into their own clusters.  In the filtered case, KMeans had relatively evenly
-distributed clusters, while GMM had two large clusters and one small cluster for
-both the filtered and unfiltered data.
-
 \textbf{b.} Re-run k-means and GMM from the previous two sections for different $k$ (you may run it each time with different $k$). Report purity for filtered and all features for each $k$ by filling up Table ~\ref{tbl:kpurity}. Discuss patterns observed, if any.\\
+Change back $k$ to 3 in your final code deliverable.
 
-Purity is at its best for low K, and oddly is very high for Kmeans All Features.
-It looks like purity may decreas exponentially in K.
-
-
-\begin{table}[!h]
+\begin{table}[h]
 \centering
 \begin{tabular}{ c | c | c | c | c}
   \hline
    & K-Means & K-Means & GMM & GMM\\
   k & All features & Filtered features & All Features & Filtered features \\
   \hline
-  2 & 0.96  & 0.57  & 0.63 &  0.73 \\
-  5 & 0.37  & 0.40 & 0.44 & 0.45 \\
-  10 & 0.32  & 0.46 & 0.32 & 0.37 \\
-  15 & 0.23  & 0.34 & 0.21 & 0.40 \\
-  \hline
+  2 &   &  &  & \\
+  5 &   &  &  & \\
+  10 &   &  &  & \\
+  15 &   &  &  & \\
+  \hline  
 \end{tabular}
 \caption{Purity values for different number of clusters}
 \label{tbl:kpurity}
 \end{table}
 
-\section{Advanced phenotyping with NMF}
-\textbf{a.} See submission. \hfill \break
+\section{Advanced phenotyping with NMF [25 points]}
+Given a feature matrix $\bm{V}$, the objective of NMF is to minimize the Euclidean distance between the original non-negative matrix $\bm{V}$ and its non-negative decomposition $\bm{W \times H}$ which can be formulated as
+\begin{align}
+& \underset{\bm{W} \succeq 0, \bm{H} \succeq 0 }{\text{argmin}} \quad \frac{1}{2} ||\bm{V} - \bm{W}\bm{H}||_2^2 \label{eq:nmf_obj}
+\end{align}
+where $\bm{V} \in \mathbb{R}_{\geq 0}^{n \times m}$, $\bm{W} \in \mathbb{R}_{\geq 0}^{n \times r}$ and $\bm{H} \in \mathbb{R}_{\geq 0}^{r \times m}$. $\bm{V}$ can be considered as a dataset comprised of $n$ number of $m$-dimensional data vectors, and $r$ is generally smaller than $n$. 
+
+To obtain a $\bm{W}$ and $\bm{H}$ which will minimize the Euclidean distance between the original non-negative matrix $\bm{B}$, we use the Multiplicative Update (MU). It defines the update rule for $\bm{W}_{ij}$ and $\bm{H}_{ij}$ as
+\begin{align*}
+\bm{W}_{ij}^{t+1} & = \bm{W}_{ij}^{t} \frac{(\bm{V} \bm{H}^{\top})_{ij}}{(\bm{W}^{t} \bm{H} \bm{H}^{\top})_{ij}} \\
+\bm{H}_{ij}^{t+1} & = \bm{H}_{ij}^{t} \frac{(\bm{W}^{\top} \bm{V})_{ij}}{(\bm{W}^{\top} \bm{W} \bm{H}^t)_{ij}}
+\end{align*}
+
+Pseudo-code for the rule is listed below.
+% You must write a code that will update $\bm{W}$ and $\bm{H}$ in a parallel fashion. It is recommended to update $\bm{W}$ by the row, and $\bm{H}$ by the column.
+
+\begin{algorithm}
+Initialize $\bm{W}, \bm{H}$ randomly\;
+\Repeat{$\frac{1}{2} ||\bm{V} - \bm{W} \bm{H}||_2^2 < \epsilon$}
+{
+	\tcc{Updating $\bm{W}[i,:]$}
+	Save $\bm{H} \bm{H}^{\top}$ as a global variable $\bm{H}_{s}$\;
+	$\bm{W}^{t+1}[i,:] = \bm{W}^{t}[i,:] \odot \bm{V}[i,:] \bm{H}^{\top} \odot (\bm{W}^{t}[i,:] \bm{H}_s)^{-1}$
+    
+    \tcc{Updating $\bm{H}[:,i]$}
+	Save $\bm{W}^{\top} \bm{W}$ as a global variable $\bm{W}_{s}$\;
+	$\bm{H}^{t+1}[:,i] = \bm{H}^{t}[:,i] \odot \bm{W}^{\top} \bm{V}[:,i] \odot (\bm{W}_{s} \bm{H}^{t}[:,i])^{-1}$
+}
+\end{algorithm}
+
+You will decompose your feature matrix $\bm{V}$, from $\bm{2.1}$, into $\bm{W}$ and $\bm{H}$. In this equation, each row of $\bm{V}$ represents one patient's features and a corresponding row in $\bm{W}$ is the patient's cluster assignment, similar to a Gaussian mixture. For example, let $r = 3$ to find three phenotype(cluster), if row 1 of $\bm{W}$ is $(0.23, 0.45, 0.12)$, you can say this patient should be group to second phenotype as $0.45$ is the largest element.
+
+$\bm{W}$ can be very large, i.e. billion patients, which must be worked on in a distributed fashion while $\bm{H}$ is relatively small and can fit into a single machine's memory. You will these two types of matricies as distributed RowMatrix and local dense Matrix respectively in the skeleton code.
+
+\textbf{a.} Implement the algorithm, as previously described, in \textit{edu.gatech.cse8803.clustering.NMF}. [15 points] 
+
 \textbf{b.} Run NMF clustering for $k=2,3,4,5$ and report the purity for two kinds of feature construction. [5 points]
-\begin{table}[!h]
-\centering
-\begin{tabular}{ c | c | c }
-  \hline
-  & NMF & NMF \\
-  k & All features & Filtered features\\
-  \hline
-  2 & 0.59 & 0.74 \\
-  3 & 0.57 & 0.76 \\
-  4 & 0.52 & 0.74 \\
-  5 & 0.61 & 0.76 \\
-  \hline
-\end{tabular}
-\caption{Purity values for different number of clusters}
-\label{tbl:kpurity}
-\end{table}
 
-\textbf{c.} Perform the comparison of clustering for the $k=3$ case with the ground truth phenotypes that you computed for the rule-based PheKB algorithms. Specifically, for each cluster, report the percetage of \textit{case}, \textit{control} and \textit{unknown} in Table~\ref{tbl:nmfall} and Table~\ref{tbl:nmffiltered} for two feature construction strategies. [5 points]
+\textbf{c.} Perform the comparison of clustering for the $k=3$ case with the ground truth phenotypes that you computed for the rule-based PheKB algorithms. Specifically, for each cluster, report the percetage of \textit{case}, \textit{control} and \textit{unknown} in Table~\ref{tbl:nmfall} and Table~\ref{tbl:nmffiltered} for two feature construction strategies. [5 points] 
 
+\textbf{d.} Show why we can use MU update rule by deriving the equation for it. [10 points bonus]
 
-\begin{table}[!h]
+\begin{table}[H]
 \centering
 \begin{tabular}{ c | c | c | c }
   \hline
   Percentage Cluster & Case & Control & Unknown\\
-  \hline
-  Cluster 1 & 0\% & 0\% & 2\% \\
-  Cluster 2 & 20\% & 68\% & 14\% \\
-  Cluster 3 & 80\% & 32\% & 84\% \\
-  \hline
+  \hline                       
+  Cluster 1 & x\% & y\% & z\% \\
+  Cluster 2 & xx\% & yy\% & zz\% \\
+  Cluster 3 & xxx\% & yyy\% & zzz\% \\
+  \hline  
    & \bf{100\%} & \bf{100\%} & \bf{100\%} \\
-  \hline
+  \hline  
 \end{tabular}
 \caption{NMF with 3 centers characteristics using all features}
 \label{tbl:nmfall}
 \end{table}
-\begin{table}[!h]
+\begin{table}[H]
 \centering
 \begin{tabular}{ c | c | c | c }
   \hline
   Percentage Cluster & Case & Control & Unknown\\
-  \hline
-  Cluster 1 & 100\% & 3\% & 38\% \\
-  Cluster 2 & 0\% & 0\% & 10\% \\
-  Cluster 3 & 0\% & 97\% & 52\% \\
-  \hline
+  \hline                       
+  Cluster 1 & x\% & y\% & z\% \\
+  Cluster 2 & xx\% & yy\% & zz\% \\
+  Cluster 3 & xxx\% & yyy\% & zzz\% \\
+  \hline  
    & \bf{100\%} & \bf{100\%} & \bf{100\%} \\
-  \hline
+  \hline  
 \end{tabular}
 \caption{NMF with 3 centers characteristics using filtered features}
 \label{tbl:nmffiltered}
 \end{table}
+
+\section{Submission [5 points]}
+The folder structure of your submission should be as below or your code will not be graded. You can display fold structure using \textit{tree} command. All other unrelated files will be discarded during testing. You may add additional methods, additional dependencies, but make sure  existing methods signature doesn't change. It's your duty to make sure your code is compilable with provided sbt. \textcolor{red}{Be aware that writeup is within code root.}
+\begin{lstlisting}[language=bash,frame=single]
+<your gtid>-<your gt account>-hw3
+|-- homework3answer.pdf
+|-- build.sbt
+|-- project
+|   |-- build.properties
+|   \-- plugins.sbt
+|-- sbt
+|   \-- sbt
+\-- src
+    \-- main
+        |-- java
+        |-- resources
+        \-- scala
+            \-- edu
+                \-- gatech
+                    \-- cse8803
+                        |-- clustering
+                        |   |-- NMF.scala
+                        |   |-- Metrics.scala
+                        |   \-- package.scala
+                        |-- features
+                        |   \-- FeatureConstruction.scala
+                        |-- ioutils
+                        |   \-- CSVUtils.scala
+                        |-- main
+                        |   \-- Main.scala
+                        |-- model
+                        |   \-- models.scala
+                        \-- phenotyping
+                            \-- PheKBPhenotype.scala
+   
+\end{lstlisting}
+Create a tar archive of the folder above with the following command and submit the tar file.
+\begin{lstlisting}[language=bash,frame=single]
+tar -czvf <your gtid>-<your gt account>-hw3.tar.gz \
+  <your gtid>-<your gt account>-hw3
+\end{lstlisting}
 
 \end{document}
 

@@ -18,7 +18,7 @@ class FeatureConstructionTest extends FlatSpec with BeforeAndAfter with Matchers
   var sparkContext: SparkContext = _
 
   before {
-    val config = new SparkConf().setAppName("Test FeatureConstruction").setMaster("local")
+    val config = new SparkConf().setAppName("Test FeatureConstruction").setMaster("local[8]")
     sparkContext = new SparkContext(config)
   }
 
