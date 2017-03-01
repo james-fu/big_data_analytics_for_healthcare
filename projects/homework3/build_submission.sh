@@ -7,13 +7,6 @@ rm -r $dirname
 rm -r $dirname.tar.gz
 
 mkdir $dirname
-#mkdir $dirname/code
-#mkdir $dirname/code/hive
-#mkdir $dirname/code/lr
-#mkdir $dirname/code/pig
-#mkdir $dirname/code/zeppelin
-
-
 
 cp -r code/src $dirname/src
 cp -r code/sbt $dirname/sbt
