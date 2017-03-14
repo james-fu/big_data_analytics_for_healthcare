@@ -63,8 +63,6 @@ object GraphLoader {
       .map(codeWithInd => (codeWithInd._2,
         DiagnosticProperty(codeWithInd._1).asInstanceOf[VertexProperty]))
 
-    vertexDiagnostic.take(100).foreach(println)
-
     ///////////////////////////////////////////////////////////////////////
 
     ///////////////////////////////////////////////////////////////////////
