@@ -33,7 +33,6 @@ object Jaccard {
       .collect()
       .toSet
 
-
     val jaccards = graph
       .collectNeighborIds(EdgeDirection.Out)
       .filter( x => patientVerts.contains(x._1))
@@ -46,6 +45,17 @@ object Jaccard {
     jaccards
   }
 
+  def patientSet(graph: Graph[VertexProperty, EdgeProperty], patientID: Long): Set[Long] = {
+
+    val setA = graph
+      .collectNeighborIds(EdgeDirection.Out)
+      .lookup(patientID)
+      .head
+      .toSet
+
+    setA
+  }
+
   def jaccardSimilarityAllPatients(graph: Graph[VertexProperty, EdgeProperty]): RDD[(Long, Long, Double)] = {
     /**
     Given a patient, med, diag, lab graph, calculate pairwise similarity between all
@@ -55,7 +65,30 @@ object Jaccard {
 
     /** Remove this placeholder and implement your code */
     val sc = graph.edges.sparkContext
-    sc.parallelize(Seq((1L, 2L, 0.5d), (1L, 3L, 0.4d)))
+
+    val patientIds = graph
+      .vertices
+      .filter( x =>
+          x._2 match { case p: PatientProperty => true case _ => false})
+      .map( _._1 )
+
+    val patientSets = patientIds
+      .collect()
+      .map( x => (x, patientSet(graph, x)))
+      .toMap
+
+    val patientSetsBC = sc.broadcast(patientSets)
+
+    val idPairs = patientIds
+      .cartesian(patientIds)
+      .filter( x => x._1 < x._2 )
+
+    val jaccards = idPairs
+      .map(x => (x._1, x._2, patientSetsBC.value.getOrElse(x._1, Set()),
+                             patientSetsBC.value.getOrElse(x._2, Set())))
+      .map(x => (x._1, x._2, jaccard(x._3, x._4)))
+
+    jaccards
   }
 
   def jaccard[A](a: Set[A], b: Set[A]): Double = {
