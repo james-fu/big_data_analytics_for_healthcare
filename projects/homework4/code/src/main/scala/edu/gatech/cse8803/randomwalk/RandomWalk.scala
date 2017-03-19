@@ -2,6 +2,7 @@ package edu.gatech.cse8803.randomwalk
 
 import edu.gatech.cse8803.model.{PatientProperty, EdgeProperty, VertexProperty}
 import org.apache.spark.graphx._
+import org.apache.spark.rdd.RDD
 
 case class CountProperty(count: Integer, randVal: Double) extends VertexProperty
 
@@ -28,6 +29,26 @@ object RandomWalk {
       .cache()
 
 
+    //println("START!!!!")
+    //output.vertices.take(10).foreach(println)
+    //
+    // Accumulate random walk results in to RDD, then do countByValue
+    // Sort, then append patientIDs not included
+    //println(mm)
+
+    /** Remove this placeholder and implement your code */
+    List(1,2,3,4,5)
+
+    val output = runOnce(newGraph, patientID, alpha)
+
+    output
+      .sortBy( x => x._2, false)
+      .map( x => x._1)
+      .collect()
+      .toList
+  }
+
+  def runOnce( newGraph: Graph[(Boolean, Boolean, Long, Int), EdgeProperty], patientID: Long, alpha: Double ): RDD[(Long, Int)] = {
 
     def vProg(id: VertexId, value: (Boolean, Boolean, Long, Int) , message: Boolean): (Boolean, Boolean, Long, Int) = {
       if ((value._1 || message) && value._2) {(true, true, value._3, value._4 + 1)}
@@ -55,41 +76,11 @@ object RandomWalk {
     val output = newGraph.pregel(false, Int.MaxValue, EdgeDirection.Out)(
       vProg, sendMsg, mergeMsg)
 
-    println("START!!!!")
-    output.vertices.take(10).foreach(println)
-    // Accumulate random walk results in to RDD, then do countByValue
-    // Sort, then append patientIDs not included
-    //println(mm)
-
-    /** Remove this placeholder and implement your code */
-    List(1,2,3,4,5)
 
     output
       .vertices
       .filter( x => x._1 != patientID )
       .filter( x => x._2._2 )
-      .sortBy( x => x._2._4, false)
-      .map( x => x._2._3)
-      .collect()
-      .toList
+      .map( x => ( x._2._3, x._2._4 ))
   }
-
-  //def singleWalk(graph: Graph[VertexProperty, EdgeProperty], patientID: Long, alpha: Double): Unit ={
-    //var visitedIds = Array()
-    //var rand_alpha = randomNumber
-
-    //var newId = patientID
-    //while rand_alpha < alpha:
-      //newId = step(graph, newId)
-
-      //visitedIds.append(newID)
-      //rand_alpha = randomNumber
-
-    //visitedIDs
-  //}
-  //def step(graph: Graph[VertexProperty, EdgeProperty], currentID: Long): Long ={
-    //graph.collectNeighborIds(j
-      //k
-    //val nextID
-  //}
 }
