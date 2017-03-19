@@ -28,7 +28,14 @@ object PowerIterationClustering {
     val sc = similarities.sparkContext
 
     /** Remove placeholder code below and run Spark's PIC implementation */
-    val clusteringResult = sc.parallelize(Seq((123L, 1),(456L, 2),(789L, 3)))
+    val pic = new PIC()
+      .setK(3)
+      .setMaxIterations(100)
+      .run(similarities)
+
+    val clusteringResult = pic
+      .assignments
+      .map( x => (x.id, x.cluster))
 
     clusteringResult
   }
