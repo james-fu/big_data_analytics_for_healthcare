@@ -31,7 +31,7 @@ object RandomWalk {
 
     /** Remove this placeholder and implement your code */
 
-    val iterRange = 1 to 50
+    val iterRange = 1 to numIter
 
     val outputs = iterRange
       .map( _ => runOnce(newGraph, patientID, alpha))
