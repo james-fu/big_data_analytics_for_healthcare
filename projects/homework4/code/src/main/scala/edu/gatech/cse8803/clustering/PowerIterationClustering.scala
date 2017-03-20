@@ -25,13 +25,12 @@ object PowerIterationClustering {
     *
     * */
   def runPIC(similarities: RDD[(Long, Long, Double)]): RDD[(Long, Int)] = {
-    val sc = similarities.sparkContext
-
+    val toCluster = similarities.cache()
     /** Remove placeholder code below and run Spark's PIC implementation */
     val pic = new PIC()
       .setK(3)
       .setMaxIterations(100)
-      .run(similarities)
+      .run(toCluster)
 
     val clusteringResult = pic
       .assignments

@@ -9,6 +9,8 @@ resolvers ++= Seq(
   Resolver.sonatypeRepo("snapshots")
 )
 
+parallelExecution in Test := false
+
 libraryDependencies ++= Seq(
   "org.apache.spark"  % "spark-core_2.10"              % "1.3.1" % "provided",
   "org.apache.spark"  % "spark-mllib_2.10"             % "1.3.1",

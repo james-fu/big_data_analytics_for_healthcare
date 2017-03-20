@@ -29,22 +29,19 @@ object RandomWalk {
       .cache()
 
 
-    //println("START!!!!")
-    //output.vertices.take(10).foreach(println)
-    //
-    // Accumulate random walk results in to RDD, then do countByValue
-    // Sort, then append patientIDs not included
-    //println(mm)
-
     /** Remove this placeholder and implement your code */
-    List(1,2,3,4,5)
 
-    val output = runOnce(newGraph, patientID, alpha)
+    val iterRange = 1 to 50
 
-    output
+    val outputs = iterRange
+      .map( _ => runOnce(newGraph, patientID, alpha))
+
+    outputs
+      .reduce( (a, b) => a.union(b) )
+      .reduceByKey( _+_ )
       .sortBy( x => x._2, false)
       .map( x => x._1)
-      .collect()
+      .take(10)
       .toList
   }
 

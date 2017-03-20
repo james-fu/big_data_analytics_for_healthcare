@@ -39,7 +39,7 @@ object Main {
     val similarities = Jaccard.jaccardSimilarityAllPatients(patientGraph)
 
     val PICLabels = PowerIterationClustering.runPIC(similarities)
-    
+
     sc.stop()
   }
 
@@ -89,7 +89,7 @@ object Main {
     new SparkContext(conf)
   }
 
-  def createContext(appName: String): SparkContext = createContext(appName, "local")
+  def createContext(appName: String): SparkContext = createContext(appName, "local[8]")
 
-  def createContext: SparkContext = createContext("CSE 8803 Homework Three Application", "local")
+  def createContext: SparkContext = createContext("CSE 8803 Homework Three Application", "local[8]")
 }

@@ -26,7 +26,7 @@ class JaccardTest extends FlatSpec with BeforeAndAfter with Matchers {
     Logger.getLogger("org").setLevel(Level.WARN)
     Logger.getLogger("akka").setLevel(Level.WARN)
 
-    val config = new SparkConf().setAppName("Test Jaccard").setMaster("local")
+    val config = new SparkConf().setAppName("Test Jaccard").setMaster("local[8]")
     sparkContext = new SparkContext(config)
   }
 
